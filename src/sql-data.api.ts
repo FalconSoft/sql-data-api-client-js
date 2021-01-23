@@ -9,6 +9,7 @@ export interface SqlSaveStatus {
 }
 
 export interface SqlReadQueryInfo {
+    fields?: string;
     filter?: string;
     filterParams?: PrimitivesObject;
     skip?: number;
@@ -26,6 +27,10 @@ export interface SqlSaveOptions {
 
 export function setBaseUrl(baseUrl: string): void {
     SqlDataApi.BaseUrl = baseUrl;
+}
+
+export function setBearerToken(bearerToken: string): void {
+    SqlDataApi.BearerToken = bearerToken;
 }
 
 export function setUserAccessToken(userAccessToken: string): void {
@@ -61,7 +66,17 @@ export class SqlDataApi {
         this.bearerToken = config?.bearerToken;
     }
 
-    async query(tableOrViewName: string, fields?: string, queryInfo: SqlReadQueryInfo = {} as SqlReadQueryInfo): Promise<ScalarObject[]> {
+    async query(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
+        let queryInfo = queryInfoSettings;
+
+        if(!queryInfo && typeof fieldsOrQuery === 'object'){
+            queryInfo = fieldsOrQuery;
+        }
+
+        queryInfo = queryInfo || {} as SqlReadQueryInfo;
+
+        const fields = (typeof fieldsOrQuery === 'string' && fieldsOrQuery && fieldsOrQuery !== '*') ? fieldsOrQuery as string
+            : queryInfo?.fields;
 
         function extractNameAndAlias(tableOrViewWithAlias: string): { name: string; alias?: string } {
             tableOrViewWithAlias = tableOrViewWithAlias.trim();
@@ -96,10 +111,12 @@ export class SqlDataApi {
             }
         }
 
+        const filterParams = queryInfo.filterParams ? this.toPrimitive(queryInfo.filterParams) : undefined;
+
         const request = {
             select: fields,
             filterString: queryInfo.filter,
-            filterParameters: queryInfo.filterParams,
+            filterParameters: filterParams,
             skip: queryInfo.skip,
             top: queryInfo.top,
             orderBy: queryInfo.orderBy,
@@ -121,7 +138,15 @@ export class SqlDataApi {
         return fromTable(response.table);
     }
 
-    async save(tableName: string, items: ScalarObject[], saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
+    async save(tableName: string, items: ScalarObject[], itemsToDeleteOrSaveOptions?: any[] | SqlSaveOptions, saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
+
+        let itemsToDelete: any[] | undefined = undefined;
+        if (!saveOptions && itemsToDeleteOrSaveOptions && !Array.isArray(itemsToDeleteOrSaveOptions)) {
+            saveOptions = itemsToDeleteOrSaveOptions as SqlSaveOptions;
+        } else if (itemsToDeleteOrSaveOptions && Array.isArray(itemsToDeleteOrSaveOptions)) {
+            itemsToDelete = itemsToDeleteOrSaveOptions as any[];
+        }
+
         const maxTableSize = 1500000;
         const maxRowsCount = saveOptions?.chunkSize || 10000;
         const primaryKeys = saveOptions?.primaryKeys || undefined;
@@ -135,7 +160,6 @@ export class SqlDataApi {
         } else if (this.userAccessToken) {
             url += `?$accessToken=${this.userAccessToken}`;
         }
-
 
         const table = toTable(items) as TableDto;
 
@@ -153,6 +177,7 @@ export class SqlDataApi {
                 fieldNames: table.fieldNames,
                 rows: []
             } as TableDto,
+            itemsToDelete,
             primaryKeys
         };
 
@@ -228,9 +253,7 @@ export class SqlDataApi {
     }
 }
 
-function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
+export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
     const requestConfig = {
         method, url,
         headers: { 'Content-Type': 'application/json', ...(headers || {}) },
@@ -258,6 +281,7 @@ interface ExecuteSqlDto {
     sql?: string;
     params?: ScalarObject;
 }
+
 interface ServerResponse<T> {
     data: T;
 }

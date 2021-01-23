@@ -3,7 +3,7 @@
 <head>
   <title>SQL Data Api</title>
   <script src="./node_modules/ace-builds/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
-  <script src="./dist/sql-data-api.js"></script>
+  <script src="./dist/sql-data-api.min.js"></script>
     <style>
     .container {
       height: 100%;
@@ -35,6 +35,8 @@
     <!-- <textarea id="result"></textarea> -->
   </div>
   <script>
+
+    console.log(window)
 
     const editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
