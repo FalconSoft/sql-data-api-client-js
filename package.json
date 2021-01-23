@@ -1,0 +1,58 @@
+{
+  "name": "sql-data-api",
+  "version": "0.2.0",
+  "description": "Sql Data Api",
+  "keywords": [
+    "sql",
+    "api"
+  ],
+  "main": "dist/sql-data-api.min.js",
+  "module": "dist/sql-data-api.esm.js",
+  "typings": "dist/sql-data-api.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "jest",
+    "test:dev": "jest --watch",
+    "test:dev:debug": "node --inspect-brk node_modules/.bin/jest --runInBand --watch",
+    "build": "npx rollup -c",
+    "build:publish": "npx rollup -c && npm publish",
+    "dev": "npx rollup --config rollup.config.dev.js --watch",
+    "lint": "npx eslint . --ext .ts",
+    "lint-fix": "eslint . --ext .ts --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/falconsoft/sql-data-api-js.git"
+  },
+  "author": {
+    "name": "Pavlo Paska - ppaska@falconsoft-ltd.com"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/FalconSoft/sql-data-api-client-js/issues"
+  },
+  "homepage": "https://github.com/FalconSoft/sql-data-api-client-js",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "datapipe-js": "^0.3.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^26.0.15",
+    "@typescript-eslint/eslint-plugin": "^4.8.2",
+    "@typescript-eslint/parser": "^4.8.2",
+    "ace-builds": "^1.4.12",
+    "eslint": "^7.14.0",
+    "jest": "^26.6.3",
+    "rollup": "^2.33.3",
+    "rollup-plugin-copy": "^3.3.0",
+    "rollup-plugin-livereload": "^2.0.0",
+    "rollup-plugin-serve": "^1.1.0",
+    "rollup-plugin-typescript2": "^0.29.0",
+    "rollup-plugin-uglify": "^6.0.4",
+    "ts-jest": "^26.4.4",
+    "tslib": "^2.0.3",
+    "typescript": "^4.1.2"
+  }
+}
