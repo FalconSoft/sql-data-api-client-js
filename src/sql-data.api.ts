@@ -16,7 +16,7 @@ export interface SqlReadQueryInfo {
     top?: number;
     orderBy?: string;
     mainTableAlias?: string;
-    joins: string;
+    joins?: [JoinType, string, string][];
 }
 
 export interface SqlSaveOptions {
@@ -57,6 +57,9 @@ export class SqlDataApi {
     private readonly userAccessToken?: string;
     private readonly bearerToken?: string;
 
+    private queryInfo: SqlReadQueryInfo = {};
+    private tableName: string = '';
+
     static BaseUrl: string;
     static UserAccessToken: string;
     static BearerToken: string;
@@ -65,11 +68,69 @@ export class SqlDataApi {
         this.userAccessToken = config?.userAccessToken;
         this.bearerToken = config?.bearerToken;
     }
+    // fluent query methods
+    filter(filter: string, filterParams?: Record<string, any>): SqlDataApi {
+        this.queryInfo.filter = filter;
+        this.queryInfo.filterParams = filterParams;
+        return this;
+    }
+
+    select(fields: string): SqlDataApi {
+        this.queryInfo.fields = fields;
+        return this;
+    }
+
+    orderBy(orderBy: string): SqlDataApi {
+        this.queryInfo.orderBy = orderBy;
+        return this;
+    }
+
+    top(top: number): SqlDataApi {
+        this.queryInfo.top = top;
+        return this;
+    }
+
+    innerJoin(tableName: string, joinCondition: string): SqlDataApi {
+        return this.join(JoinType.InnerJoin, tableName, joinCondition);
+    }
+
+    leftJoin(tableName: string, joinCondition: string): SqlDataApi {
+        return this.join(JoinType.LeftJoin, tableName, joinCondition);
+    }
+
+    rightJoin(tableName: string, joinCondition: string): SqlDataApi {
+        return this.join(JoinType.RightJoin, tableName, joinCondition);
+    }
+
+    join(joinType: JoinType, tableName: string, joinCondition: string): SqlDataApi {
+        if (!this.queryInfo.joins) {
+            this.queryInfo.joins = [];
+        }
+        this.queryInfo.joins.push([joinType, tableName, joinCondition])
+        return this;
+    }
+
+    table(name: string): SqlDataApi {
+        this.tableName = name;
+        return this;
+    }
+    // end fluent query methods
+
+    async runQuery(tableOrViewName?: string, fields?: string): Promise<ScalarObject[]> {
+        const result = await this.query(
+            tableOrViewName || this.tableName,
+            fields || this.queryInfo?.fields,
+            this.queryInfo
+        );
+        // reset query that it is not used in another call
+        this.queryInfo = {} as SqlReadQueryInfo;
+        return result;
+    }
 
     async query(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
         let queryInfo = queryInfoSettings;
 
-        if(!queryInfo && typeof fieldsOrQuery === 'object'){
+        if (!queryInfo && typeof fieldsOrQuery === 'object') {
             queryInfo = fieldsOrQuery;
         }
 
