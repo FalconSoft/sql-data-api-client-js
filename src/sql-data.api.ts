@@ -58,7 +58,7 @@ export class SqlDataApi {
     private readonly bearerToken?: string;
 
     private queryInfo: SqlReadQueryInfo = {};
-    private tableName: string = '';
+    private tableName = '';
 
     static BaseUrl: string;
     static UserAccessToken: string;
@@ -116,18 +116,21 @@ export class SqlDataApi {
     }
     // end fluent query methods
 
-    async runQuery(tableOrViewName?: string, fields?: string): Promise<ScalarObject[]> {
-        const result = await this.query(
+    async runQuery(tableOrViewName?: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
+        const result = await this._query(
             tableOrViewName || this.tableName,
-            fields || this.queryInfo?.fields,
-            this.queryInfo
+            fieldsOrQuery || this.queryInfo?.fields,
+            queryInfoSettings || this.queryInfo
         );
         // reset query that it is not used in another call
         this.queryInfo = {} as SqlReadQueryInfo;
         return result;
     }
-
     async query(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
+        return await this.runQuery(tableOrViewName, fieldsOrQuery, queryInfoSettings);
+    }
+
+    private async _query(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
         let queryInfo = queryInfoSettings;
 
         if (!queryInfo && typeof fieldsOrQuery === 'object') {
@@ -199,8 +202,13 @@ export class SqlDataApi {
         return fromTable(response.table);
     }
 
-    async save(tableName: string, items: ScalarObject[], itemsToDeleteOrSaveOptions?: any[] | SqlSaveOptions, saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
+    async delete(tableName: string, items: [] | any): Promise<boolean> {
+        const itemsToDelete = Array.isArray(items) ? items : [items];
+        await this.saveData(tableName, undefined, itemsToDelete);
+        return true
+    }
 
+    async save(tableName: string, items: ScalarObject[], itemsToDeleteOrSaveOptions?: any[] | SqlSaveOptions, saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
         let itemsToDelete: any[] | undefined = undefined;
         if (!saveOptions && itemsToDeleteOrSaveOptions && !Array.isArray(itemsToDeleteOrSaveOptions)) {
             saveOptions = itemsToDeleteOrSaveOptions as SqlSaveOptions;
@@ -208,11 +216,12 @@ export class SqlDataApi {
             itemsToDelete = itemsToDeleteOrSaveOptions as any[];
         }
 
-        const maxTableSize = 1500000;
-        const maxRowsCount = saveOptions?.chunkSize || 10000;
-        const primaryKeys = saveOptions?.primaryKeys || undefined;
+        return await this.saveData(tableName, items, itemsToDelete, saveOptions);
+    }
 
-        let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/save/${tableName}`;
+    async saveWithAutoId(tableName: string, item: ScalarObject): Promise<number> {
+        let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/save-with-autoid/${tableName}`;
+        const dto = this.toPrimitive(item);
 
         // set authentication code
         const headers = {} as Record<string, string>;
@@ -222,46 +231,8 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const table = toTable(items) as TableDto;
-
-        ///////////////
-        const status: SqlSaveStatus = {
-            inserted: 0,
-            updated: 0,
-            deleted: 0
-        };
-
-        const allRows = table.rows;
-
-        const body = {
-            tableData: {
-                fieldNames: table.fieldNames,
-                rows: []
-            } as TableDto,
-            itemsToDelete,
-            primaryKeys
-        };
-
-        let currentIndex = -1;
-        let currentSize = 0;
-
-        while (++currentIndex < allRows.length) {
-            const row = allRows[currentIndex];
-            body.tableData.rows.push(row);
-            currentSize += JSON.stringify(allRows[currentIndex]).length;
-
-            if ((currentIndex + 1) >= allRows.length || body.tableData.rows.length >= maxRowsCount || currentSize > maxTableSize) {
-                const singleStatus = (await httpRequest('POST', url, body, headers)) as SqlSaveStatus
-
-                status.inserted += singleStatus.inserted;
-                status.updated += singleStatus.updated;
-                status.deleted += singleStatus.deleted;
-                currentSize = 0;
-                body.tableData.rows = [];
-            }
-        }
-
-        return status;
+        const result = await httpRequest('POST', url, dto, headers) as number
+        return result;
     }
 
     async sqlExecute(sql: string, params?: ScalarObject): Promise<ScalarObject[] | unknown> {
@@ -296,6 +267,76 @@ export class SqlDataApi {
         const result = await httpRequest('POST', url, dto, headers) as SqlQueryResponse;
 
         return result?.table ? fromTable(result.table) : result;
+    }
+
+    private async saveData(tableName: string, items?: Record<string, ScalarType>[], itemsToDelete?: any[],
+        saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
+
+        const maxTableSize = 1500000;
+        const maxRowsCount = saveOptions?.chunkSize || 10000;
+        const primaryKeys = saveOptions?.primaryKeys || undefined;
+        const saveMethod = saveOptions?.method === 'Append' ? 'append-data' : 'save';
+
+        let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/${saveMethod}/${tableName}`;
+
+        // set authentication code
+        const headers = {} as Record<string, string>;
+        if (this.bearerToken) {
+            headers["Authorization"] = `Bearer ${this.bearerToken}`;
+        } else if (this.userAccessToken) {
+            url += `?$accessToken=${this.userAccessToken}`;
+        }
+        const status: SqlSaveStatus = {
+            inserted: 0,
+            updated: 0,
+            deleted: 0
+        };
+
+        itemsToDelete = itemsToDelete?.map(r => this.toPrimitive(r));
+
+        if (!items || !items.length) {
+            if (itemsToDelete?.length) {
+                return await httpRequest('POST', url, { itemsToDelete }, headers) as SqlSaveStatus;
+            } else {
+                return status;
+            }
+        } else {
+            const table = toTable(items) as TableDto;
+
+            ///////////////
+
+            const allRows = table.rows;
+
+            const body = {
+                tableData: {
+                    fieldNames: table.fieldNames,
+                    rows: []
+                } as TableDto,
+                itemsToDelete,
+                primaryKeys
+            };
+
+            let currentIndex = -1;
+            let currentSize = 0;
+
+            while (++currentIndex < allRows.length) {
+                const row = allRows[currentIndex];
+                body.tableData.rows.push(row);
+                currentSize += JSON.stringify(allRows[currentIndex]).length;
+
+                if ((currentIndex + 1) >= allRows.length || body.tableData.rows.length >= maxRowsCount || currentSize > maxTableSize) {
+                    const singleStatus = (await httpRequest('POST', url, body, headers)) as SqlSaveStatus;
+
+                    status.inserted += singleStatus.inserted;
+                    status.updated += singleStatus.updated;
+                    status.deleted += singleStatus.deleted;
+                    currentSize = 0;
+                    body.tableData.rows = [];
+                }
+            }
+
+            return status;
+        }
     }
 
     private toPrimitive(obj: ScalarObject): PrimitivesObject {
