@@ -202,6 +202,53 @@ export class SqlDataApi {
         return fromTable(response.table);
     }
 
+    async updateData(tableName: string, updateData: Record<string, ScalarType>, filter?: string, filterParams?: Record<string, ScalarType>) {
+        let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/update-data/${tableName}`;
+
+        filterParams = this.toPrimitive(filterParams || {});
+
+        const dto = {
+            updateProperties: this.toPrimitive(updateData || {}),
+            filter: {
+                filterString: filter,
+                filterParameters: filterParams
+            }
+        };
+
+        // set authentication code
+        const headers = {} as Record<string, string>;
+        if (this.bearerToken) {
+            headers["Authorization"] = `Bearer ${this.bearerToken}`;
+        } else if (this.userAccessToken) {
+            url += `?$accessToken=${this.userAccessToken}`;
+        }
+
+        const result = await httpRequest('POST', url, dto, headers) as number
+        return result;
+    }
+
+    async deleteFrom(tableName: string, filter?: string, filterParams?: Record<string, ScalarType>) {
+        let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/delete-from/${tableName}`;
+
+        filterParams = this.toPrimitive(filterParams || {});
+
+        const dto = {
+            filterString: filter,
+            filterParameters: filterParams
+        };
+
+        // set authentication code
+        const headers = {} as Record<string, string>;
+        if (this.bearerToken) {
+            headers["Authorization"] = `Bearer ${this.bearerToken}`;
+        } else if (this.userAccessToken) {
+            url += `?$accessToken=${this.userAccessToken}`;
+        }
+
+        const result = await httpRequest('POST', url, dto, headers) as number
+        return result;
+    }
+
     async delete(tableName: string, items: [] | any): Promise<boolean> {
         const itemsToDelete = Array.isArray(items) ? items : [items];
         await this.saveData(tableName, undefined, itemsToDelete);
