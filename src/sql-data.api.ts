@@ -11,7 +11,7 @@ export interface SqlSaveStatus {
 export interface SqlReadQueryInfo {
     fields?: string;
     filter?: string;
-    filterParams?: PrimitivesObject;
+    filterParams?: Record<string, ScalarType>;
     skip?: number;
     top?: number;
     orderBy?: string;
@@ -39,7 +39,7 @@ export function setUserAccessToken(userAccessToken: string): void {
 
 export async function authenticate(username: string, password: string): Promise<boolean> {
     SqlDataApi.BearerToken = (
-        await httpRequest('POST', `${SqlDataApi.BaseUrl}/api/security/authenticate`, { username, password }) as { token: string }
+        await httpRequest('POST', `${SqlDataApi.BaseUrl}/api/security/authenticate`, { username, password }, {}) as { token: string }
     ).token
     return true;
 }
@@ -69,7 +69,7 @@ export class SqlDataApi {
         this.bearerToken = config?.bearerToken;
     }
     // fluent query methods
-    filter(filter: string, filterParams?: Record<string, any>): SqlDataApi {
+    filter(filter: string, filterParams?: Record<string, ScalarType>): SqlDataApi {
         this.queryInfo.filter = filter;
         this.queryInfo.filterParams = filterParams;
         return this;
@@ -126,6 +126,7 @@ export class SqlDataApi {
         this.queryInfo = {} as SqlReadQueryInfo;
         return result;
     }
+
     async query(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
         return await this.runQuery(tableOrViewName, fieldsOrQuery, queryInfoSettings);
     }
@@ -202,7 +203,8 @@ export class SqlDataApi {
         return fromTable(response.table);
     }
 
-    async updateData(tableName: string, updateData: Record<string, ScalarType>, filter?: string, filterParams?: Record<string, ScalarType>) {
+    async updateData(tableName: string, updateData: Record<string, ScalarType>, filter?: string,
+        filterParams?: Record<string, ScalarType>): Promise<number> {
         let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/update-data/${tableName}`;
 
         filterParams = this.toPrimitive(filterParams || {});
@@ -227,7 +229,7 @@ export class SqlDataApi {
         return result;
     }
 
-    async deleteFrom(tableName: string, filter?: string, filterParams?: Record<string, ScalarType>) {
+    async deleteFrom(tableName: string, filter?: string, filterParams?: Record<string, ScalarType>): Promise<number> {
         let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/delete-from/${tableName}`;
 
         filterParams = this.toPrimitive(filterParams || {});
@@ -249,18 +251,20 @@ export class SqlDataApi {
         return result;
     }
 
-    async delete(tableName: string, items: [] | any): Promise<boolean> {
+    async delete(tableName: string, items: Record<string, ScalarType>[]): Promise<boolean> {
         const itemsToDelete = Array.isArray(items) ? items : [items];
         await this.saveData(tableName, undefined, itemsToDelete);
         return true
     }
 
-    async save(tableName: string, items: ScalarObject[], itemsToDeleteOrSaveOptions?: any[] | SqlSaveOptions, saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
-        let itemsToDelete: any[] | undefined = undefined;
+    async save(tableName: string, items: ScalarObject[],
+        itemsToDeleteOrSaveOptions?: Record<string, unknown>[] | SqlSaveOptions,
+        saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
+        let itemsToDelete: Record<string, ScalarType>[] | undefined = undefined;
         if (!saveOptions && itemsToDeleteOrSaveOptions && !Array.isArray(itemsToDeleteOrSaveOptions)) {
             saveOptions = itemsToDeleteOrSaveOptions as SqlSaveOptions;
         } else if (itemsToDeleteOrSaveOptions && Array.isArray(itemsToDeleteOrSaveOptions)) {
-            itemsToDelete = itemsToDeleteOrSaveOptions as any[];
+            itemsToDelete = itemsToDeleteOrSaveOptions as Record<string, ScalarType>[];
         }
 
         return await this.saveData(tableName, items, itemsToDelete, saveOptions);
@@ -316,7 +320,7 @@ export class SqlDataApi {
         return result?.table ? fromTable(result.table) : result;
     }
 
-    private async saveData(tableName: string, items?: Record<string, ScalarType>[], itemsToDelete?: any[],
+    private async saveData(tableName: string, items?: Record<string, ScalarType>[], itemsToDelete?: Record<string, ScalarType>[],
         saveOptions?: SqlSaveOptions): Promise<SqlSaveStatus> {
 
         const maxTableSize = 1500000;
@@ -327,9 +331,9 @@ export class SqlDataApi {
         let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/${saveMethod}/${tableName}`;
 
         // set authentication code
-        const headers = {} as Record<string, string>;
+        const headersValue = {} as Record<string, string>;
         if (this.bearerToken) {
-            headers["Authorization"] = `Bearer ${this.bearerToken}`;
+            headersValue.Authorization = `Bearer ${this.bearerToken}`;
         } else if (this.userAccessToken) {
             url += `?$accessToken=${this.userAccessToken}`;
         }
@@ -343,7 +347,7 @@ export class SqlDataApi {
 
         if (!items || !items.length) {
             if (itemsToDelete?.length) {
-                return await httpRequest('POST', url, { itemsToDelete }, headers) as SqlSaveStatus;
+                return await httpRequest('POST', url, { itemsToDelete }, Object.assign({}, headersValue)) as SqlSaveStatus;
             } else {
                 return status;
             }
@@ -372,7 +376,15 @@ export class SqlDataApi {
                 currentSize += JSON.stringify(allRows[currentIndex]).length;
 
                 if ((currentIndex + 1) >= allRows.length || body.tableData.rows.length >= maxRowsCount || currentSize > maxTableSize) {
-                    const singleStatus = (await httpRequest('POST', url, body, headers)) as SqlSaveStatus;
+                    // set authentication code
+                    const headersValue = {} as Record<string, string>;
+                    if (this.bearerToken) {
+                        headersValue.Authorization = `Bearer ${this.bearerToken}`;
+                    } else if (this.userAccessToken) {
+                        url += `?$accessToken=${this.userAccessToken}`;
+                    }                    
+
+                    const singleStatus = await httpRequest('POST', url, body, Object.assign({}, headersValue)) as SqlSaveStatus;
 
                     status.inserted += singleStatus.inserted;
                     status.updated += singleStatus.updated;
@@ -402,10 +414,10 @@ export class SqlDataApi {
     }
 }
 
-export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
+export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body: TRequest, headers: Record<string, string>): Promise<TResponse> {
     const requestConfig = {
         method, url,
-        headers: { 'Content-Type': 'application/json', ...(headers || {}) },
+        headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}),
         data: JSON.stringify(body || {})
     };
 
@@ -418,8 +430,7 @@ export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' 
                 // beyond a statusText
                 const response = e.response || {};
                 const err = Error((response.data || {}).message || response.data || response.statusText || 'Http Connection Error');
-                (err as any).status = response.status;
-                (err as any).statusText = response.statusText;
+                Object.assign(err, response);
                 throw err;
             }
         );
