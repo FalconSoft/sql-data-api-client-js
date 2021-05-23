@@ -1,7 +1,10 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { PrimitivesObject, PrimitiveType, ScalarObject, ScalarType, TableDto } from 'datapipe-js';
 import { dateToString, fromTable, toTable } from 'datapipe-js/utils';
 
+const appHttpHeaders = {
+    'Content-Type': 'application/json'
+};
 export interface SqlSaveStatus {
     inserted: number;
     updated: number;
@@ -39,7 +42,7 @@ export function setUserAccessToken(userAccessToken: string): void {
 
 export async function authenticate(username: string, password: string): Promise<boolean> {
     SqlDataApi.BearerToken = (
-        await httpRequest('POST', `${SqlDataApi.BaseUrl}/api/security/authenticate`, { username, password }, {}) as { token: string }
+        await httpRequest('POST', `${SqlDataApi.BaseUrl}/api/security/authenticate`, { username, password }, appHttpHeaders) as { token: string }
     ).token
     return true;
 }
@@ -85,8 +88,8 @@ export class SqlDataApi {
         return this;
     }
 
-    top(top: number): SqlDataApi {
-        this.queryInfo.top = top;
+    top(top: number | string): SqlDataApi {
+        this.queryInfo.top = +top;
         return this;
     }
 
@@ -132,6 +135,10 @@ export class SqlDataApi {
     }
 
     private async _query(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]> {
+        if (!tableOrViewName?.length) {
+            return Promise.reject(new Error('Table Name is not specified'));
+        }
+
         let queryInfo = queryInfoSettings;
 
         if (!queryInfo && typeof fieldsOrQuery === 'object') {
@@ -189,9 +196,19 @@ export class SqlDataApi {
             tablesJoin
         } as RequestSqlQueryInfo;
 
+        if (!this.connectionName?.length) {
+            return Promise.reject(new Error('Connection Name is not specified'));
+        }
+        if (!this.baseUrl?.length) {
+            return Promise.reject(new Error('Base URL is not specified'));
+        }
+
         let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/query/${mainTable.name}`;
 
         // set authentication code
+        if (!this.bearerToken && !this.userAccessToken) {
+            return Promise.reject(new Error(`Authentication failed. Please provide a valid User Access Token or 'Login'`));
+        }
         const headers = {} as Record<string, string>;
         if (this.bearerToken) {
             headers["Authorization"] = `Bearer ${this.bearerToken}`;
@@ -199,7 +216,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const response = await httpRequest('POST', url, request, headers) as SqlQueryResponse
+        const response = await httpRequest('POST', url, request, { ...appHttpHeaders, ...headers }) as SqlQueryResponse
         return fromTable(response.table);
     }
 
@@ -225,7 +242,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, headers) as number
+        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as number
         return result;
     }
 
@@ -247,7 +264,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, headers) as number
+        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as number
         return result;
     }
 
@@ -282,7 +299,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, headers) as number
+        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as number
         return result;
     }
 
@@ -315,7 +332,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, headers) as SqlQueryResponse;
+        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as SqlQueryResponse;
 
         return result?.table ? fromTable(result.table) : result;
     }
@@ -347,7 +364,7 @@ export class SqlDataApi {
 
         if (!items || !items.length) {
             if (itemsToDelete?.length) {
-                return await httpRequest('POST', url, { itemsToDelete }, Object.assign({}, headersValue)) as SqlSaveStatus;
+                return await httpRequest('POST', url, { itemsToDelete }, { ...appHttpHeaders, ...headersValue }) as SqlSaveStatus;
             } else {
                 return status;
             }
@@ -382,9 +399,10 @@ export class SqlDataApi {
                         headersValue.Authorization = `Bearer ${this.bearerToken}`;
                     } else if (this.userAccessToken) {
                         url += `?$accessToken=${this.userAccessToken}`;
-                    }                    
+                    }
 
-                    const singleStatus = await httpRequest('POST', url, body, Object.assign({}, headersValue)) as SqlSaveStatus;
+                    const singleStatus = await httpRequest('POST', url, body,
+                        Object.assign(appHttpHeaders, headersValue)) as SqlSaveStatus;
 
                     status.inserted += singleStatus.inserted;
                     status.updated += singleStatus.updated;
@@ -414,12 +432,17 @@ export class SqlDataApi {
     }
 }
 
-export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body: TRequest, headers: Record<string, string>): Promise<TResponse> {
-    const requestConfig = {
-        method, url,
-        headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}),
-        data: JSON.stringify(body || {})
-    };
+export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: TRequest, headers?: Record<string, string>): Promise<TResponse> {
+    const requestConfig: AxiosRequestConfig = { method, url };
+
+    if (headers) {
+        requestConfig.headers = headers;
+    }
+
+    if (body) {
+        requestConfig.data = typeof body === 'object' ?
+            JSON.stringify(body) : body;
+    }
 
     return axios.request(requestConfig)
         .then(
@@ -429,11 +452,35 @@ export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' 
                 // this was a reason why we switched to axios, as it gives us a real exception details,
                 // beyond a statusText
                 const response = e.response || {};
-                const err = Error((response.data || {}).message || response.data || response.statusText || 'Http Connection Error');
+                let errMessage = (response.data || {}).message || response.data || response.statusText || 'Http Connection Error';
+                if (typeof (errMessage) === 'object') {
+                    errMessage = JSON.stringify(errMessage);
+                }
+                const err = Error(errMessage);
                 Object.assign(err, response);
                 throw err;
             }
         );
+}
+
+export function httpGet<TResponse>(url: string, headers?: Record<string, string>): Promise<TResponse> {
+    return httpRequest('GET', url, null, headers);
+}
+
+export function httpGetText(url: string, headers?: Record<string, string>): Promise<string> {
+    return httpRequest('GET', url, null, { ...{ 'Content-Type': 'text/plain' }, ...headers });
+}
+
+export function httpPost<TRequest, TResponse>(url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
+    return httpRequest('POST', url, body, headers);
+}
+
+export function httpPut<TRequest, TResponse>(url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
+    return httpRequest('PUT', url, body, headers);
+}
+
+export function httpDelete<TRequest, TResponse>(url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
+    return httpRequest('DELETE', url, body, headers);
 }
 
 interface ExecuteSqlDto {
