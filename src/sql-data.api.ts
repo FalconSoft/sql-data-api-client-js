@@ -205,10 +205,6 @@ export class SqlDataApi {
 
         let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/query/${mainTable.name}`;
 
-        // set authentication code
-        if (!this.bearerToken && !this.userAccessToken) {
-            return Promise.reject(new Error(`Authentication failed. Please provide a valid User Access Token or 'Login'`));
-        }
         const headers = {} as Record<string, string>;
         if (this.bearerToken) {
             headers["Authorization"] = `Bearer ${this.bearerToken}`;
