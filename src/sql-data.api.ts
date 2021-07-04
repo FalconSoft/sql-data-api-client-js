@@ -42,7 +42,7 @@ export function setUserAccessToken(userAccessToken: string): void {
 
 export async function authenticate(username: string, password: string): Promise<boolean> {
     SqlDataApi.BearerToken = (
-        await httpRequest('POST', `${SqlDataApi.BaseUrl}/api/security/authenticate`, { username, password }, appHttpHeaders) as { token: string }
+        await httpRequest('POST', `${SqlDataApi.BaseUrl}/api/security/authenticate`, { username, password }, { headers: appHttpHeaders }) as { token: string }
     ).token
     return true;
 }
@@ -212,7 +212,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const response = await httpRequest('POST', url, request, { ...appHttpHeaders, ...headers }) as SqlQueryResponse
+        const response = await httpRequest('POST', url, request, { headers: { ...appHttpHeaders, ...headers }}) as SqlQueryResponse
         return fromTable(response.table);
     }
 
@@ -238,7 +238,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as number
+        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers }}) as number
         return result;
     }
 
@@ -260,7 +260,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as number
+        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers }}) as number
         return result;
     }
 
