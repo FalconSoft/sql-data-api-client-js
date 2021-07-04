@@ -1,6 +1,6 @@
 import typescript from 'rollup-plugin-typescript2';
 import copy from 'rollup-plugin-copy'
-import { uglify } from "rollup-plugin-uglify";
+import { terser } from "rollup-plugin-terser";
 
 const pkg = require('./package.json');
 const input = 'src/sql-data.api.ts';
@@ -17,7 +17,7 @@ export default [{
     copy({
       targets: []
     }),
-    uglify()
+    terser()
   ]
 }, {
   input,

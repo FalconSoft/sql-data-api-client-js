@@ -295,7 +295,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as number
+        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers } }) as number
         return result;
     }
 
@@ -328,7 +328,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, { ...appHttpHeaders, ...headers }) as SqlQueryResponse;
+        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers } }) as SqlQueryResponse;
 
         return result?.table ? fromTable(result.table) : result;
     }
@@ -360,7 +360,7 @@ export class SqlDataApi {
 
         if (!items || !items.length) {
             if (itemsToDelete?.length) {
-                return await httpRequest('POST', url, { itemsToDelete }, { ...appHttpHeaders, ...headersValue }) as SqlSaveStatus;
+                return await httpRequest('POST', url, { itemsToDelete }, { headers: { ...appHttpHeaders, ...headersValue } }) as SqlSaveStatus;
             } else {
                 return status;
             }
@@ -393,12 +393,13 @@ export class SqlDataApi {
                     const headersValue = {} as Record<string, string>;
                     if (this.bearerToken) {
                         headersValue.Authorization = `Bearer ${this.bearerToken}`;
-                    } else if (this.userAccessToken) {
+                    } else if (this.userAccessToken && url.indexOf('?$accessToken=') < 0) {
                         url += `?$accessToken=${this.userAccessToken}`;
                     }
 
+
                     const singleStatus = await httpRequest('POST', url, body,
-                        Object.assign(appHttpHeaders, headersValue)) as SqlSaveStatus;
+                        { headers: Object.assign(appHttpHeaders, headersValue) }) as SqlSaveStatus;
 
                     status.inserted += singleStatus.inserted;
                     status.updated += singleStatus.updated;
@@ -428,12 +429,8 @@ export class SqlDataApi {
     }
 }
 
-export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: TRequest, headers?: Record<string, string>): Promise<TResponse> {
-    const requestConfig: AxiosRequestConfig = { method, url };
-
-    if (headers) {
-        requestConfig.headers = headers;
-    }
+export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: TRequest, config?: Record<string, any>): Promise<TResponse> {
+    const requestConfig: AxiosRequestConfig = { method, url, ...(config || {}) };
 
     if (body) {
         requestConfig.data = typeof body === 'object' ?
@@ -459,24 +456,33 @@ export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' 
         );
 }
 
-export function httpGet<TResponse>(url: string, headers?: Record<string, string>): Promise<TResponse> {
-    return httpRequest('GET', url, null, headers);
+export function httpGet<TResponse>(url: string, config?: Record<string, any>): Promise<TResponse> {
+    return httpRequest('GET', url, null, config);
 }
 
-export function httpGetText(url: string, headers?: Record<string, string>): Promise<string> {
-    return httpRequest('GET', url, null, { ...{ 'Content-Type': 'text/plain' }, ...headers });
+export function httpGetText(url: string, config?: Record<string, any>): Promise<string> {
+    const headers = config?.headers || {};
+    headers['Content-Type'] = 'text/plain';
+
+    if (!config) {
+        config = {};
+    }
+
+    config.headers = headers;
+
+    return httpRequest('GET', url, null, config);
 }
 
-export function httpPost<TRequest, TResponse>(url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
-    return httpRequest('POST', url, body, headers);
+export function httpPost<TRequest, TResponse>(url: string, body: TRequest, config?: Record<string, any>): Promise<TResponse> {
+    return httpRequest('POST', url, body, config);
 }
 
-export function httpPut<TRequest, TResponse>(url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
-    return httpRequest('PUT', url, body, headers);
+export function httpPut<TRequest, TResponse>(url: string, body: TRequest, config?: Record<string, any>): Promise<TResponse> {
+    return httpRequest('PUT', url, body, config);
 }
 
-export function httpDelete<TRequest, TResponse>(url: string, body: TRequest, headers?: Record<string, string>): Promise<TResponse> {
-    return httpRequest('DELETE', url, body, headers);
+export function httpDelete<TRequest, TResponse>(url: string, body: TRequest, config?: Record<string, any>): Promise<TResponse> {
+    return httpRequest('DELETE', url, body, config);
 }
 
 interface ExecuteSqlDto {
