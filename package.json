@@ -1,6 +1,6 @@
 {
   "name": "sql-data-api",
-  "version": "0.2.26",
+  "version": "0.2.28",
   "description": "Sql Data Api",
   "keywords": [
     "sql",
@@ -24,7 +24,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/falconsoft/sql-data-api-js.git"
+    "url": "git+https://github.com/FalconSoft/sql-data-api-client-js.git"
   },
   "author": {
     "name": "Pavlo Paska - ppaska@falconsoft-ltd.com"
@@ -36,7 +36,7 @@
   "homepage": "https://github.com/FalconSoft/sql-data-api-client-js",
   "dependencies": {
     "axios": "^0.21.1",
-    "datapipe-js": "^0.3.12"
+    "datapipe-js": "^0.3.16"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.8.2",

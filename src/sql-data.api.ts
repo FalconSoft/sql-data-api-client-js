@@ -1,10 +1,14 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import { PrimitivesObject, PrimitiveType, ScalarObject, ScalarType, TableDto } from 'datapipe-js';
 import { dateToString, fromTable, toTable } from 'datapipe-js/utils';
+import { DbTypeConverter } from './db-type-converter';
+
+export * from './db-types'
 
 const appHttpHeaders = {
     'Content-Type': 'application/json'
 };
+
 export interface SqlSaveStatus {
     inserted: number;
     updated: number;
@@ -212,7 +216,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const response = await httpRequest('POST', url, request, { headers: { ...appHttpHeaders, ...headers }}) as SqlQueryResponse
+        const response = await httpRequest('POST', url, request, { headers: { ...appHttpHeaders, ...headers } }) as SqlQueryResponse
         return fromTable(response.table);
     }
 
@@ -238,7 +242,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers }}) as number
+        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers } }) as number
         return result;
     }
 
@@ -260,7 +264,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
         }
 
-        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers }}) as number
+        const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers } }) as number
         return result;
     }
 
@@ -427,6 +431,10 @@ export class SqlDataApi {
 
         return result;
     }
+}
+
+export function dbTypeConverter() {
+    return new DbTypeConverter();
 }
 
 export function httpRequest<TRequest, TResponse>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: TRequest, config?: Record<string, any>): Promise<TResponse> {
