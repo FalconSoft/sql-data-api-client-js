@@ -320,7 +320,7 @@ export class SqlDataApi {
 		return result;
 	}
 
-	async sqlExecuteToTable(sql: string, params?: ScalarObject): Promise<Table<PrimitiveType>> {
+	async sqlExecuteRaw(sql: string, params?: ScalarObject): Promise<SqlQueryResponse> {
 		sql = sql?.trim() || '';
 		if (!sql.length) {
 			throw new Error('sql text is not provided');
@@ -351,12 +351,12 @@ export class SqlDataApi {
 
 		const result = await httpRequest('POST', url, dto, { headers: { ...appHttpHeaders, ...headers } }) as SqlQueryResponse;
 
-		return result?.table;
+		return result;
 	}
 
 	async sqlExecute(sql: string, params?: ScalarObject): Promise<ScalarObject[] | unknown> {
-		const table = await this.sqlExecuteToTable(sql, params);
-		return table ? fromTable(table) : table;
+		const response = await this.sqlExecuteRaw(sql, params);
+		return response ? fromTable(response.table) : response;
 	}
 
 	private async saveData(tableName: string, items?: Record<string, ScalarType>[], itemsToDelete?: Record<string, ScalarType>[],
@@ -556,5 +556,6 @@ interface TableJoinDto {
 }
 
 interface SqlQueryResponse {
-	table: TableDto
+	message: string;
+	table: TableDto;
 }
