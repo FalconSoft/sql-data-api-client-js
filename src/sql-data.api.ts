@@ -234,7 +234,7 @@ export class SqlDataApi {
 		}
 
 		const response = await httpRequest('POST', url, request, { headers: { ...appHttpHeaders, ...headers } }) as SqlQueryResponse
-		return response.table;
+		return response.table as TableDto;
 	}
 
 	async updateData(tableName: string, updateData: Record<string, ScalarType>, filter?: string,
@@ -320,7 +320,7 @@ export class SqlDataApi {
 		return result;
 	}
 
-	async sqlExecuteRaw(sql: string, params?: ScalarObject): Promise<SqlQueryResponse> {
+	async sqlExecuteRaw(sql: string, params?: ScalarObject, paramDirections?: Record<string, string>): Promise<SqlQueryResponse> {
 		sql = sql?.trim() || '';
 		if (!sql.length) {
 			throw new Error('sql text is not provided');
@@ -335,7 +335,7 @@ export class SqlDataApi {
 
 		const dto = {
 			commandType: sql.indexOf(' ') > 0 ? 'Text' : 'StoredProcedure',
-			sql, params
+			sql, params, paramDirections
 		} as ExecuteSqlDto;
 
 
@@ -356,7 +356,7 @@ export class SqlDataApi {
 
 	async sqlExecute(sql: string, params?: ScalarObject): Promise<ScalarObject[] | unknown> {
 		const response = await this.sqlExecuteRaw(sql, params);
-		return response ? fromTable(response.table) : response;
+		return response ? fromTable(response.table as TableDto) : response;
 	}
 
 	private async saveData(tableName: string, items?: Record<string, ScalarType>[], itemsToDelete?: Record<string, ScalarType>[],
@@ -527,6 +527,7 @@ interface ExecuteSqlDto {
 	commandType?: 'Text' | 'StoredProcedure';
 	sql?: string;
 	params?: ScalarObject;
+	paramDirections?: Record<string, string>;
 }
 
 interface ServerResponse<T> {
@@ -556,6 +557,9 @@ interface TableJoinDto {
 }
 
 interface SqlQueryResponse {
-	message: string;
-	table: TableDto;
+	message?: string;
+	table?: TableDto;
+	outputParameters?: Record<string, any>;
+	resultType: 'Table' | 'Items';
+	items?: PrimitivesObject[];
 }
