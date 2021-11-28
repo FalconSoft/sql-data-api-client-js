@@ -7,8 +7,16 @@ const input = 'src/sql-data.api.ts';
 
 export default [{
   input,
-  output: { file: pkg.main, name: 'sql-data-api', format: 'umd', sourcemap: true, compact: true },
-  external: [],
+  output: { file: pkg.main, name: 'sql-data-api', format: 'umd', sourcemap: true, compact: true, globals: {
+    'axios': 'Axios',
+    'datapipe-js': 'dataPipeJs',
+    'datapipe-js/utils': 'dataPipeJsUtils'
+  }},
+  external: [
+    'axios',
+    'datapipe-js',
+    'datapipe-js/utils'
+  ],
   treeshake: true,
   plugins: [
     typescript({
