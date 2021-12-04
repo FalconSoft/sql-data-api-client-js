@@ -34,10 +34,10 @@ export interface SqlReadQueryInfo {
 }
 
 export interface SqlSaveOptions {
-  chunkSize?: number;
-  primaryKeys: string[];
   method: "Merge" | "Append" | "BulkInsert";
-  batchProgressFunc?: (status: SqlSaveStatus) => void;
+  batchSize?: number;
+  primaryKeys?: string[];
+  batchProgressFunc?: (processedCount: number, status: SqlSaveStatus) => void;
 }
 
 export function setBaseUrl(baseUrl: string): void {
@@ -488,7 +488,7 @@ export class SqlDataApi {
     saveOptions?: SqlSaveOptions
   ): Promise<SqlSaveStatus> {
     const maxTableSize = 1500000;
-    const maxRowsCount = saveOptions?.chunkSize || 10000;
+    const maxRowsCount = saveOptions?.batchSize || 10000;
     const primaryKeys = saveOptions?.primaryKeys || undefined;
     const batchSavedFunc = saveOptions?.batchProgressFunc;
     const saveMethod =
@@ -571,7 +571,7 @@ export class SqlDataApi {
           })) as SqlSaveStatus;
 
           if (typeof batchSavedFunc === "function") {
-            batchSavedFunc(singleStatus);
+            batchSavedFunc(currentIndex + 1, singleStatus);
           }
 
           status.inserted += singleStatus.inserted;
@@ -605,7 +605,7 @@ export class SqlDataApi {
   }
 }
 
-export function dbTypeConverter() {
+export function dbTypeConverter(): DbTypeConverter {
   return new DbTypeConverter();
 }
 
