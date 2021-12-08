@@ -16,27 +16,105 @@ const appHttpHeaders = {
   "Content-Type": "application/json",
 };
 
+/**
+ * Interface that represents a SQL save result
+ */
 export interface SqlSaveStatus {
+  /**
+   * Number of inserted row
+   */
   inserted: number;
+
+  /**
+   * Number of updated row
+   */
   updated: number;
+
+  /**
+   * Number of deleted row
+   */
   deleted: number;
 }
 
+/**
+ * Sql Query configuration
+ */
 export interface SqlReadQueryInfo {
+  /**
+   * A list of comma separated fields to select.
+   * Examples:
+   *  - 'Field1, Field2'
+   *  - 't.Field1, t.Field2' - where t is an alias
+   *  - 'concat(FirstName, ' ', LastName) FullName, AnotherField' - you can use SQL functions
+   *  - 'groupBy|Country, sum(profit) Profit' - aggregated query.
+   */
   fields?: string;
+
+  /**
+   * A filter expression. Where you can use SQL functions, aliases and parameters
+   * Examples:
+   *  - "Country = 'UK'"
+   *  - "Country = @country AND City = @city"
+   *  - "concat(t.FirstName, ' ', t.LastName) = @fullName"
+   */
   filter?: string;
+
+  /**
+   * A filter parameters used in an expresiion
+   * e.g: {country: 'UK', fullName: 'Adam Smith'}
+   */
   filterParams?: Record<string, ScalarType>;
+
+  /**
+   * Number of rows to skip
+   */
   skip?: number;
+
+  /**
+   * top rows to take
+   */
   top?: number;
+
+  /**
+   * Define a sortings fields
+   */
   orderBy?: string;
+
+  /**
+   * Alias for main table. But default it is undefined
+   */
   mainTableAlias?: string;
+
+  /**
+   * joins tables together
+   * Examples:
+   *  - ['InnerJoin', 'Customers c', 't.CustomerId = c.CustomerID'] - inner joins mainTable to Cutomers table
+   */
   joins?: [JoinType, string, string][];
 }
 
+/**
+ * Sql Save operation config
+ */
 export interface SqlSaveOptions {
+  /**
+   * save types
+   */
   method: "Merge" | "Append" | "BulkInsert";
+
+  /**
+   * a batch size for optimization point
+   */
   batchSize?: number;
+  /**
+   * Define a primary key that should be used. Normally primary keys are taken from the table,
+   * Use this property only if you want to upsert (merge) data on some other fields 
+   */
   primaryKeys?: string[];
+
+  /**
+   * Report progress on batch saving
+   */
   batchProgressFunc?: (processedCount: number, status: SqlSaveStatus) => void;
 }
 
