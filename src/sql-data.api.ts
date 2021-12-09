@@ -108,7 +108,7 @@ export interface SqlSaveOptions {
   batchSize?: number;
   /**
    * Define a primary key that should be used. Normally primary keys are taken from the table,
-   * Use this property only if you want to upsert (merge) data on some other fields 
+   * Use this property only if you want to upsert (merge) data on some other fields
    */
   primaryKeys?: string[];
 
@@ -118,18 +118,42 @@ export interface SqlSaveOptions {
   batchProgressFunc?: (processedCount: number, status: SqlSaveStatus) => void;
 }
 
+export interface SqlQueryResponse {
+  message?: string;
+  table?: TableDto;
+  outputParameters?: Record<string, any>;
+  resultType: "Table" | "Items";
+  items?: PrimitivesObject[];
+}
+
+/**
+ * Set Base URL for SQL data api
+ * @param baseUrl
+ */
 export function setBaseUrl(baseUrl: string): void {
   SqlDataApi.BaseUrl = baseUrl;
 }
 
+/**
+ * set bearer token for authentication
+ * @param bearerToken
+ */
 export function setBearerToken(bearerToken: string): void {
   SqlDataApi.BearerToken = bearerToken;
 }
 
+/**
+ * Set api Access Token issued by Worksheet System's API
+ * @param userAccessToken
+ */
 export function setUserAccessToken(userAccessToken: string): void {
   SqlDataApi.UserAccessToken = userAccessToken;
 }
 
+/**
+ * Use Worksheet Systems' username and password to Authenticate for further api calls.
+ * It logins you and set bearer token for further api calls
+ */
 export async function authenticate(
   username: string,
   password: string
@@ -145,6 +169,12 @@ export async function authenticate(
   return true;
 }
 
+/**
+ * A factory function that creates SqlDataApi instance
+ * @param connectionName connectionName
+ * @param config define baseUrl, apiAccessToken or bearer token
+ * @returns
+ */
 export function sqlDataApi(
   connectionName: string,
   config?: { baseUrl?: string; userAccessToken?: string; bearerToken?: string }
@@ -160,6 +190,100 @@ export function sqlDataApi(
   );
 }
 
+export function dbTypeConverter(): DbTypeConverter {
+  return new DbTypeConverter();
+}
+
+export function httpRequest<TRequest, TResponse>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  url: string,
+  body?: TRequest,
+  config?: Record<string, any>
+): Promise<TResponse> {
+  const requestConfig: AxiosRequestConfig = { method, url, ...(config || {}) };
+
+  if (body) {
+    requestConfig.data = typeof body === "object" ? JSON.stringify(body) : body;
+    if (!requestConfig.headers) {
+      requestConfig.headers = {};
+    }
+    if (!requestConfig.headers["Content-Type"]) {
+      requestConfig.headers["Content-Type"] = "application/json";
+    }
+  }
+
+  return axios.request(requestConfig).then(
+    (r: ServerResponse<TResponse>): TResponse => r.data,
+    (e) => {
+      // making an error more informative.
+      // this was a reason why we switched to axios, as it gives us a real exception details,
+      // beyond a statusText
+      const response = e.response || {};
+      let errMessage =
+        (response.data || {}).message ||
+        response.data ||
+        response.statusText ||
+        "Http Connection Error";
+      if (typeof errMessage === "object") {
+        errMessage = JSON.stringify(errMessage);
+      }
+      const err = Error(errMessage);
+      Object.assign(err, response);
+      throw err;
+    }
+  );
+}
+
+export function httpGet<TResponse>(
+  url: string,
+  config?: Record<string, any>
+): Promise<TResponse> {
+  return httpRequest("GET", url, null, config);
+}
+
+export function httpGetText(
+  url: string,
+  config?: Record<string, any>
+): Promise<string> {
+  const headers = config?.headers || {};
+  headers["Content-Type"] = "text/plain";
+
+  if (!config) {
+    config = {};
+  }
+
+  config.headers = headers;
+
+  return httpRequest("GET", url, null, config);
+}
+
+export function httpPost<TRequest, TResponse>(
+  url: string,
+  body: TRequest,
+  config?: Record<string, any>
+): Promise<TResponse> {
+  return httpRequest("POST", url, body, config);
+}
+
+export function httpPut<TRequest, TResponse>(
+  url: string,
+  body: TRequest,
+  config?: Record<string, any>
+): Promise<TResponse> {
+  return httpRequest("PUT", url, body, config);
+}
+
+export function httpDelete<TRequest, TResponse>(
+  url: string,
+  body: TRequest,
+  config?: Record<string, any>
+): Promise<TResponse> {
+  return httpRequest("DELETE", url, body, config);
+}
+
+/**
+ *
+ */
 export class SqlDataApi {
   private readonly userAccessToken?: string;
   private readonly bearerToken?: string;
@@ -179,7 +303,15 @@ export class SqlDataApi {
     this.userAccessToken = config?.userAccessToken;
     this.bearerToken = config?.bearerToken;
   }
-  // fluent query methods
+
+  // fluent API methods
+  /**
+   * sets filter and returns same
+   * - use this method for a fluent API
+   * @param filter filter string e.g. "country='UK' or city=@city"
+   * @param filterParams filter parameters e.g. {city: 'London'}
+   * @returns same SqlDataApi instance
+   */
   filter(
     filter: string,
     filterParams?: Record<string, ScalarType>
@@ -189,6 +321,12 @@ export class SqlDataApi {
     return this;
   }
 
+  /**
+   * sets fields that you want to setup
+   * - use this method for a fluent API
+   * @param fields - a a list of fields separated by comma
+   * @returns same SqlDataApi instance
+   */
   select(fields: string): SqlDataApi {
     this.queryInfo.fields = fields;
     return this;
@@ -234,7 +372,11 @@ export class SqlDataApi {
   }
   // end fluent query methods
 
-  async runQuery(
+  /**
+   * queries data from SQL Server
+   * @returns An array of items
+   */
+  async query(
     tableOrViewName?: string,
     fieldsOrQuery?: string | SqlReadQueryInfo,
     queryInfoSettings?: SqlReadQueryInfo
@@ -252,18 +394,9 @@ export class SqlDataApi {
     return result;
   }
 
-  async query(
-    tableOrViewName: string,
-    fieldsOrQuery?: string | SqlReadQueryInfo,
-    queryInfoSettings?: SqlReadQueryInfo
-  ): Promise<ScalarObject[]> {
-    return await this.runQuery(
-      tableOrViewName,
-      fieldsOrQuery,
-      queryInfoSettings
-    );
-  }
-
+  /**
+   * queries data from SQL table/view and returns results as a TableDto
+   */
   async queryToTable(
     tableOrViewName: string,
     fieldsOrQuery?: string | SqlReadQueryInfo,
@@ -276,127 +409,10 @@ export class SqlDataApi {
     );
   }
 
-  private async _query(
-    tableOrViewName: string,
-    fieldsOrQuery?: string | SqlReadQueryInfo,
-    queryInfoSettings?: SqlReadQueryInfo
-  ): Promise<ScalarObject[]> {
-    const table = await this._queryTable(
-      tableOrViewName,
-      fieldsOrQuery,
-      queryInfoSettings
-    );
-    return fromTable(table);
-  }
-
-  private async _queryTable(
-    tableOrViewName: string,
-    fieldsOrQuery?: string | SqlReadQueryInfo,
-    queryInfoSettings?: SqlReadQueryInfo
-  ): Promise<Table<PrimitiveType>> {
-    if (!tableOrViewName?.length) {
-      return Promise.reject(new Error("Table Name is not specified"));
-    }
-
-    let queryInfo = queryInfoSettings;
-
-    if (!queryInfo && typeof fieldsOrQuery === "object") {
-      queryInfo = fieldsOrQuery;
-    }
-
-    queryInfo = queryInfo || ({} as SqlReadQueryInfo);
-
-    const fields =
-      typeof fieldsOrQuery === "string" &&
-      fieldsOrQuery &&
-      fieldsOrQuery !== "*"
-        ? (fieldsOrQuery as string)
-        : queryInfo?.fields;
-
-    function extractNameAndAlias(tableOrViewWithAlias: string): {
-      name: string;
-      alias?: string;
-    } {
-      tableOrViewWithAlias = tableOrViewWithAlias.trim();
-      return {
-        alias:
-          tableOrViewWithAlias.indexOf(" ") > 0
-            ? tableOrViewWithAlias
-                .substring(tableOrViewWithAlias.lastIndexOf(" "))
-                .trim()
-            : undefined,
-
-        name:
-          tableOrViewWithAlias.indexOf(" ") > 0
-            ? tableOrViewWithAlias
-                .substring(0, tableOrViewWithAlias.indexOf(" "))
-                .trim()
-            : tableOrViewWithAlias.trim(),
-      };
-    }
-
-    function join(
-      joins: TableJoinDto[],
-      joinType: JoinType,
-      tableOrViewWithAlias: string,
-      joinCondition: string
-    ): TableJoinDto[] {
-      const nameAlias = extractNameAndAlias(tableOrViewWithAlias);
-      joins.push({
-        joinCondition,
-        joinType,
-        tableAlias: nameAlias.alias,
-        tableName: nameAlias.name,
-      });
-      return joins;
-    }
-
-    const mainTable = extractNameAndAlias(tableOrViewName);
-    const tablesJoin: TableJoinDto[] = [];
-
-    if (queryInfo.joins && queryInfo.joins.length) {
-      for (const j of queryInfo.joins) {
-        join(tablesJoin, j[0] as JoinType, j[1], j[2]);
-      }
-    }
-
-    const filterParams = queryInfo.filterParams
-      ? this.toPrimitive(queryInfo.filterParams)
-      : undefined;
-
-    const request = {
-      select: fields,
-      filterString: queryInfo.filter,
-      filterParameters: filterParams,
-      skip: queryInfo.skip,
-      top: queryInfo.top,
-      orderBy: queryInfo.orderBy,
-      mainTableAlias: mainTable.alias || queryInfo.mainTableAlias,
-      tablesJoin,
-    } as RequestSqlQueryInfo;
-
-    if (!this.connectionName?.length) {
-      return Promise.reject(new Error("Connection Name is not specified"));
-    }
-    if (!this.baseUrl?.length) {
-      return Promise.reject(new Error("Base URL is not specified"));
-    }
-
-    let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/query/${mainTable.name}`;
-
-    const headers = {} as Record<string, string>;
-    if (this.bearerToken) {
-      headers["Authorization"] = `Bearer ${this.bearerToken}`;
-    } else if (this.userAccessToken) {
-      url += `?$accessToken=${this.userAccessToken}`;
-    }
-
-    const response = (await httpRequest("POST", url, request, {
-      headers: { ...appHttpHeaders, ...headers },
-    })) as SqlQueryResponse;
-    return response.table as TableDto;
-  }
-
+  /**
+   * Updates data in the table based on filter parameters
+   * @returns Number of rows affected
+   */
   async updateData(
     tableName: string,
     updateData: Record<string, ScalarType>,
@@ -429,6 +445,9 @@ export class SqlDataApi {
     return result;
   }
 
+  /**
+   * Delete records from the table based on filter criteria
+   */
   async deleteFrom(
     tableName: string,
     filter?: string,
@@ -457,6 +476,10 @@ export class SqlDataApi {
     return result;
   }
 
+  /**
+   * Deletes rows from the table based on a primary keys. Only key fields have to be provided
+   * @returns success
+   */
   async delete(
     tableName: string,
     items: Record<string, ScalarType>[]
@@ -466,6 +489,17 @@ export class SqlDataApi {
     return true;
   }
 
+  /**
+   * Upsert(Merge), Append or BulkInsert an array of items into the table based on save options
+   * If third parameter is an array, it will delete records from the table. Only Key Fields must be provided
+   *  Example with a simple default options, that will merge array of items into the table:
+   *   - sqlDataApi('someConnection').save('someTable', arrayOfItems)
+   * @param tableName table Name
+   * @param items an array of items to store. Only primary key fields are mandatory
+   * @param itemsToDeleteOrSaveOptions items to delete or SaveOptions object
+   * @param saveOptions  SaveOptions Object
+   * @returns
+   */
   async save(
     tableName: string,
     items: ScalarObject[],
@@ -492,6 +526,11 @@ export class SqlDataApi {
     return await this.saveData(tableName, items, itemsToDelete, saveOptions);
   }
 
+  /**
+   * Saves a single record into the database and returns autogenerated ID field.
+   * SQL Table should have Auto Indentity on one of the fields
+   * @returns
+   */
   async saveWithAutoId(tableName: string, item: ScalarObject): Promise<number> {
     let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/save-with-autoid/${tableName}`;
     const dto = this.toPrimitive(item);
@@ -510,6 +549,10 @@ export class SqlDataApi {
     return result;
   }
 
+  /**
+   * Executes a SQL Query or stored procedure with parameters
+   * @returns Raw result (SqlQueryResponse) with a table in it
+   */
   async sqlExecuteRaw(
     sql: string,
     params?: ScalarObject,
@@ -551,6 +594,10 @@ export class SqlDataApi {
     return result;
   }
 
+  /**
+   * Executes a SQL Query or stored procedure with parameters
+   * @returns result as a list of arrays
+   */
   async sqlExecute(
     sql: string,
     params?: ScalarObject
@@ -681,97 +728,127 @@ export class SqlDataApi {
 
     return result;
   }
-}
 
-export function dbTypeConverter(): DbTypeConverter {
-  return new DbTypeConverter();
-}
-
-export function httpRequest<TRequest, TResponse>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
-  url: string,
-  body?: TRequest,
-  config?: Record<string, any>
-): Promise<TResponse> {
-  const requestConfig: AxiosRequestConfig = { method, url, ...(config || {}) };
-
-  if (body) {
-    requestConfig.data = typeof body === "object" ? JSON.stringify(body) : body;
-    if (!requestConfig.headers) {
-      requestConfig.headers = {};
-    }
-    if (!requestConfig.headers["Content-Type"]) {
-      requestConfig.headers["Content-Type"] = "application/json";
-    }
+  private async _query(
+    tableOrViewName: string,
+    fieldsOrQuery?: string | SqlReadQueryInfo,
+    queryInfoSettings?: SqlReadQueryInfo
+  ): Promise<ScalarObject[]> {
+    const table = await this._queryTable(
+      tableOrViewName,
+      fieldsOrQuery,
+      queryInfoSettings
+    );
+    return fromTable(table);
   }
 
-  return axios.request(requestConfig).then(
-    (r: ServerResponse<TResponse>): TResponse => r.data,
-    (e) => {
-      // making an error more informative.
-      // this was a reason why we switched to axios, as it gives us a real exception details,
-      // beyond a statusText
-      const response = e.response || {};
-      let errMessage =
-        (response.data || {}).message ||
-        response.data ||
-        response.statusText ||
-        "Http Connection Error";
-      if (typeof errMessage === "object") {
-        errMessage = JSON.stringify(errMessage);
+  private async _queryTable(
+    tableOrViewName: string,
+    fieldsOrQuery?: string | SqlReadQueryInfo,
+    queryInfoSettings?: SqlReadQueryInfo
+  ): Promise<Table<PrimitiveType>> {
+    if (!tableOrViewName?.length) {
+      return Promise.reject(new Error("Table Name is not specified"));
+    }
+
+    let queryInfo = queryInfoSettings;
+
+    if (!queryInfo && typeof fieldsOrQuery === "object") {
+      queryInfo = fieldsOrQuery;
+    }
+
+    queryInfo = queryInfo || ({} as SqlReadQueryInfo);
+
+    const fields =
+      typeof fieldsOrQuery === "string" &&
+      fieldsOrQuery &&
+      fieldsOrQuery !== "*"
+        ? (fieldsOrQuery as string)
+        : queryInfo?.fields;
+
+    function extractNameAndAlias(tableOrViewWithAlias: string): {
+      name: string;
+      alias?: string;
+    } {
+      tableOrViewWithAlias = tableOrViewWithAlias.trim();
+      return {
+        alias:
+          tableOrViewWithAlias.indexOf(" ") > 0
+            ? tableOrViewWithAlias
+                .substring(tableOrViewWithAlias.lastIndexOf(" "))
+                .trim()
+            : undefined,
+
+        name:
+          tableOrViewWithAlias.indexOf(" ") > 0
+            ? tableOrViewWithAlias
+                .substring(0, tableOrViewWithAlias.indexOf(" "))
+                .trim()
+            : tableOrViewWithAlias.trim(),
+      };
+    }
+
+    function join(
+      joins: TableJoinDto[],
+      joinType: JoinType,
+      tableOrViewWithAlias: string,
+      joinCondition: string
+    ): TableJoinDto[] {
+      const nameAlias = extractNameAndAlias(tableOrViewWithAlias);
+      joins.push({
+        joinCondition,
+        joinType,
+        tableAlias: nameAlias.alias,
+        tableName: nameAlias.name,
+      });
+      return joins;
+    }
+
+    const mainTable = extractNameAndAlias(tableOrViewName);
+    const tablesJoin: TableJoinDto[] = [];
+
+    if (queryInfo.joins && queryInfo.joins.length) {
+      for (const j of queryInfo.joins) {
+        join(tablesJoin, j[0] as JoinType, j[1], j[2]);
       }
-      const err = Error(errMessage);
-      Object.assign(err, response);
-      throw err;
     }
-  );
-}
 
-export function httpGet<TResponse>(
-  url: string,
-  config?: Record<string, any>
-): Promise<TResponse> {
-  return httpRequest("GET", url, null, config);
-}
+    const filterParams = queryInfo.filterParams
+      ? this.toPrimitive(queryInfo.filterParams)
+      : undefined;
 
-export function httpGetText(
-  url: string,
-  config?: Record<string, any>
-): Promise<string> {
-  const headers = config?.headers || {};
-  headers["Content-Type"] = "text/plain";
+    const request = {
+      select: fields,
+      filterString: queryInfo.filter,
+      filterParameters: filterParams,
+      skip: queryInfo.skip,
+      top: queryInfo.top,
+      orderBy: queryInfo.orderBy,
+      mainTableAlias: mainTable.alias || queryInfo.mainTableAlias,
+      tablesJoin,
+    } as RequestSqlQueryInfo;
 
-  if (!config) {
-    config = {};
+    if (!this.connectionName?.length) {
+      return Promise.reject(new Error("Connection Name is not specified"));
+    }
+    if (!this.baseUrl?.length) {
+      return Promise.reject(new Error("Base URL is not specified"));
+    }
+
+    let url = `${this.baseUrl}/sql-data-api/${this.connectionName}/query/${mainTable.name}`;
+
+    const headers = {} as Record<string, string>;
+    if (this.bearerToken) {
+      headers["Authorization"] = `Bearer ${this.bearerToken}`;
+    } else if (this.userAccessToken) {
+      url += `?$accessToken=${this.userAccessToken}`;
+    }
+
+    const response = (await httpRequest("POST", url, request, {
+      headers: { ...appHttpHeaders, ...headers },
+    })) as SqlQueryResponse;
+    return response.table as TableDto;
   }
-
-  config.headers = headers;
-
-  return httpRequest("GET", url, null, config);
-}
-
-export function httpPost<TRequest, TResponse>(
-  url: string,
-  body: TRequest,
-  config?: Record<string, any>
-): Promise<TResponse> {
-  return httpRequest("POST", url, body, config);
-}
-
-export function httpPut<TRequest, TResponse>(
-  url: string,
-  body: TRequest,
-  config?: Record<string, any>
-): Promise<TResponse> {
-  return httpRequest("PUT", url, body, config);
-}
-
-export function httpDelete<TRequest, TResponse>(
-  url: string,
-  body: TRequest,
-  config?: Record<string, any>
-): Promise<TResponse> {
-  return httpRequest("DELETE", url, body, config);
 }
 
 interface ExecuteSqlDto {
@@ -808,12 +885,4 @@ interface TableJoinDto {
   tableAlias?: string;
   joinType: JoinType;
   joinCondition: string;
-}
-
-interface SqlQueryResponse {
-  message?: string;
-  table?: TableDto;
-  outputParameters?: Record<string, any>;
-  resultType: "Table" | "Items";
-  items?: PrimitivesObject[];
 }
