@@ -818,14 +818,14 @@ export class SqlDataApi {
       : undefined;
 
     const request = {
-      select: fields,
-      filterString: queryInfo.filter,
-      filterParameters: filterParams,
-      skip: queryInfo.skip,
-      top: queryInfo.top,
-      orderBy: queryInfo.orderBy,
-      mainTableAlias: mainTable.alias || queryInfo.mainTableAlias,
-      tablesJoin,
+      select: fields?.length ? fields : undefined,
+      filterString: queryInfo.filter || undefined,
+      filterParameters: filterParams || undefined,
+      skip: queryInfo.skip || undefined,
+      top: queryInfo.top || undefined,
+      orderBy: queryInfo.orderBy || undefined,
+      mainTableAlias: mainTable.alias || queryInfo.mainTableAlias || undefined,
+      tablesJoin: tablesJoin?.length ? tablesJoin : undefined,
     } as RequestSqlQueryInfo;
 
     if (!this.connectionName?.length) {
