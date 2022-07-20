@@ -158,14 +158,18 @@ export async function authenticate(
   username: string,
   password: string
 ): Promise<boolean> {
-  SqlDataApi.BearerToken = (
-    (await httpRequest(
-      "POST",
-      `${SqlDataApi.BaseUrl}/api/security/authenticate`,
-      { username, password },
-      { headers: appHttpHeaders }
-    )) as { token: string }
-  ).token;
+  const res = await httpRequest(
+    "POST",
+    `${SqlDataApi.BaseUrl}/api/security/authenticate`,
+    { username, password },
+    { headers: appHttpHeaders }
+  );
+
+  if (res.errorMessage) {
+    throw new Error(res.errorMessage);
+  }
+
+  SqlDataApi.BearerToken = (res.data as { token: string }).token;
   return true;
 }
 
@@ -199,7 +203,7 @@ export function httpRequest<TRequest, TResponse>(
   url: string,
   body?: TRequest,
   config?: Record<string, any>
-): Promise<TResponse> {
+): Promise<ServerResponse<TResponse>> {
   const requestConfig: AxiosRequestConfig = { method, url, ...(config || {}) };
 
   if (body) {
@@ -213,23 +217,33 @@ export function httpRequest<TRequest, TResponse>(
   }
 
   return axios.request(requestConfig).then(
-    (r: ServerResponse<TResponse>): TResponse => r.data,
+    (r: ServerResponse<TResponse>): ServerResponse<TResponse> => ({
+      data: r.data,
+      isOk: true,
+      status: r.status,
+      statusText: r.statusText,
+    }),
     (e) => {
       // making an error more informative.
       // this was a reason why we switched to axios, as it gives us a real exception details,
       // beyond a statusText
       const response = e.response || {};
-      let errMessage =
+      let errorMessage =
         (response.data || {}).message ||
         response.data ||
         response.statusText ||
         "Http Connection Error";
-      if (typeof errMessage === "object") {
-        errMessage = JSON.stringify(errMessage);
+      if (typeof errorMessage === "object") {
+        errorMessage = JSON.stringify(errorMessage);
       }
-      const err = Error(errMessage);
-      Object.assign(err, response);
-      throw err;
+
+      return {
+        isOk: false,
+        status: response.status,
+        statusText: response.statusText,
+        data: null as any,
+        errorMessage,
+      };
     }
   );
 }
@@ -237,14 +251,14 @@ export function httpRequest<TRequest, TResponse>(
 export function httpGet<TResponse>(
   url: string,
   config?: Record<string, any>
-): Promise<TResponse> {
+): Promise<ServerResponse<TResponse>> {
   return httpRequest("GET", url, null, config);
 }
 
 export function httpGetText(
   url: string,
   config?: Record<string, any>
-): Promise<string> {
+): Promise<ServerResponse<string>> {
   const headers = config?.headers || {};
   headers["Content-Type"] = "text/plain";
 
@@ -261,7 +275,7 @@ export function httpPost<TRequest, TResponse>(
   url: string,
   body: TRequest,
   config?: Record<string, any>
-): Promise<TResponse> {
+): Promise<ServerResponse<TResponse>> {
   return httpRequest("POST", url, body, config);
 }
 
@@ -269,7 +283,7 @@ export function httpPut<TRequest, TResponse>(
   url: string,
   body: TRequest,
   config?: Record<string, any>
-): Promise<TResponse> {
+): Promise<ServerResponse<TResponse>> {
   return httpRequest("PUT", url, body, config);
 }
 
@@ -277,7 +291,7 @@ export function httpDelete<TRequest, TResponse>(
   url: string,
   body: TRequest,
   config?: Record<string, any>
-): Promise<TResponse> {
+): Promise<ServerResponse<TResponse>> {
   return httpRequest("DELETE", url, body, config);
 }
 
@@ -439,9 +453,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const result = (await httpRequest("POST", url, dto, {
+    const res = await httpRequest("POST", url, dto, {
       headers: { ...appHttpHeaders, ...headers },
-    })) as number;
+    });
+
+    if (res.errorMessage) {
+      throw new Error(res.errorMessage);
+    }
+
+    const result = res.data as number;
     return result;
   }
 
@@ -470,9 +490,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const result = (await httpRequest("POST", url, dto, {
+    const res = await httpRequest("POST", url, dto, {
       headers: { ...appHttpHeaders, ...headers },
-    })) as number;
+    });
+
+    if (res.errorMessage) {
+      throw new Error(res.errorMessage);
+    }
+
+    const result = res.data as number;
     return result;
   }
 
@@ -543,9 +569,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const result = (await httpRequest("POST", url, dto, {
+    const res = await httpRequest("POST", url, dto, {
       headers: { ...appHttpHeaders, ...headers },
-    })) as number;
+    });
+
+    if (res.errorMessage) {
+      throw new Error(res.errorMessage);
+    }
+
+    const result = res.data as number;
     return result;
   }
 
@@ -587,9 +619,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const result = (await httpRequest("POST", url, dto, {
+    const res = await httpRequest("POST", url, dto, {
       headers: { ...appHttpHeaders, ...headers },
-    })) as SqlQueryResponse;
+    });
+
+    if (res.errorMessage) {
+      throw new Error(res.errorMessage);
+    }
+
+    const result = res.data as SqlQueryResponse;
 
     return result;
   }
@@ -642,12 +680,18 @@ export class SqlDataApi {
 
     if (!items || !items.length) {
       if (itemsToDelete?.length) {
-        return (await httpRequest(
+        const res = await httpRequest(
           "POST",
           url,
           { itemsToDelete },
           { headers: { ...appHttpHeaders, ...headersValue } }
-        )) as SqlSaveStatus;
+        );
+
+        if (res.errorMessage) {
+          throw new Error(res.errorMessage);
+        }
+
+        return res.data as SqlSaveStatus;
       } else {
         return status;
       }
@@ -691,9 +735,15 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
           }
 
-          const singleStatus = (await httpRequest("POST", url, body, {
+          const res = await httpRequest("POST", url, body, {
             headers: Object.assign(appHttpHeaders, headersValue),
-          })) as SqlSaveStatus;
+          });
+
+          if (res.errorMessage) {
+            throw new Error(res.errorMessage);
+          }
+
+          const singleStatus = res.data as SqlSaveStatus;
 
           if (typeof batchSavedFunc === "function") {
             batchSavedFunc(currentIndex + 1, singleStatus);
@@ -844,9 +894,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const response = (await httpRequest("POST", url, request, {
+    const res = await httpRequest("POST", url, request, {
       headers: { ...appHttpHeaders, ...headers },
-    })) as SqlQueryResponse;
+    });
+
+    if (res.errorMessage) {
+      throw new Error(res.errorMessage);
+    }
+
+    const response = res.data as SqlQueryResponse;
     return response.table as TableDto;
   }
 }
@@ -860,6 +916,10 @@ interface ExecuteSqlDto {
 
 interface ServerResponse<T> {
   data: T;
+  isOk?: boolean;
+  status: number;
+  statusText: string;
+  errorMessage?: string;
 }
 
 interface RequestSqlQueryInfo {
