@@ -251,14 +251,19 @@ export function httpRequest<TRequest, TResponse>(
 export function httpGet<TResponse>(
   url: string,
   config?: Record<string, any>
-): Promise<ServerResponse<TResponse>> {
-  return httpRequest("GET", url, null, config);
+): Promise<TResponse> {
+  return httpRequest("GET", url, null, config).then((r) => {
+    if (!r.errorMessage) {
+      return r.data as TResponse;
+    }
+    throw new Error(r.errorMessage);
+  });
 }
 
 export function httpGetText(
   url: string,
   config?: Record<string, any>
-): Promise<ServerResponse<string>> {
+): Promise<string> {
   const headers = config?.headers || {};
   headers["Content-Type"] = "text/plain";
 
@@ -268,31 +273,51 @@ export function httpGetText(
 
   config.headers = headers;
 
-  return httpRequest("GET", url, null, config);
+  return httpRequest("GET", url, null, config).then((r) => {
+    if (!r.errorMessage) {
+      return r.data as string;
+    }
+    throw new Error(r.errorMessage);
+  });
 }
 
 export function httpPost<TRequest, TResponse>(
   url: string,
   body: TRequest,
   config?: Record<string, any>
-): Promise<ServerResponse<TResponse>> {
-  return httpRequest("POST", url, body, config);
+): Promise<TResponse> {
+  return httpRequest("POST", url, body, config).then((r) => {
+    if (!r.errorMessage) {
+      return r.data as TResponse;
+    }
+    throw new Error(r.errorMessage);
+  });
 }
 
 export function httpPut<TRequest, TResponse>(
   url: string,
   body: TRequest,
   config?: Record<string, any>
-): Promise<ServerResponse<TResponse>> {
-  return httpRequest("PUT", url, body, config);
+): Promise<TResponse> {
+  return httpRequest("PUT", url, body, config).then((r) => {
+    if (!r.errorMessage) {
+      return r.data as TResponse;
+    }
+    throw new Error(r.errorMessage);
+  });
 }
 
 export function httpDelete<TRequest, TResponse>(
   url: string,
   body: TRequest,
   config?: Record<string, any>
-): Promise<ServerResponse<TResponse>> {
-  return httpRequest("DELETE", url, body, config);
+): Promise<TResponse> {
+  return httpRequest("DELETE", url, body, config).then((r) => {
+    if (!r.errorMessage) {
+      return r.data as TResponse;
+    }
+    throw new Error(r.errorMessage);
+  });
 }
 
 /**
