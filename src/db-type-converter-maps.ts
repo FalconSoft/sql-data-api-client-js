@@ -1,5 +1,5 @@
 import { DataTypeName } from "datapipe-js";
-import { PostgreSqlDataTypes, SQLDataTypes } from "./db-types";
+import { PostgreSqlDataTypes, SQLDataTypes, SybaseAseDataTypes } from "./db-types";
 
 
 export const SqlTypesToDataTypesMap: Record<SQLDataTypes, DataTypeName> = {
@@ -23,6 +23,27 @@ export const SqlTypesToDataTypesMap: Record<SQLDataTypes, DataTypeName> = {
     [SQLDataTypes.BIT]: DataTypeName.Boolean
 };
 
+export const SybaseAseTypesToDataTypesMap: Record<SybaseAseDataTypes, DataTypeName> = {
+    [SybaseAseDataTypes.TEXT]: DataTypeName.LargeString,
+    [SybaseAseDataTypes.CHAR]: DataTypeName.String,
+    [SybaseAseDataTypes.VARCHAR]: DataTypeName.String,
+    [SybaseAseDataTypes.NVARCHAR]: DataTypeName.String,
+    [SybaseAseDataTypes.BINARY]: DataTypeName.LargeString,
+    [SybaseAseDataTypes.VARBINARY]: DataTypeName.LargeString,
+    [SybaseAseDataTypes.DATE]: DataTypeName.Date,
+    [SybaseAseDataTypes.SMALLDATETIME]: DataTypeName.DateTime,
+    [SybaseAseDataTypes.DATETIME]: DataTypeName.DateTime,
+    [SybaseAseDataTypes.DECIMAL]: DataTypeName.FloatNumber,
+    [SybaseAseDataTypes.FLOAT]: DataTypeName.FloatNumber,
+    [SybaseAseDataTypes.MONEY]: DataTypeName.FloatNumber,
+    [SybaseAseDataTypes.NUMERIC]: DataTypeName.FloatNumber,
+    [SybaseAseDataTypes.REAL]: DataTypeName.FloatNumber,
+    [SybaseAseDataTypes.SMALLINT]: DataTypeName.WholeNumber,
+    [SybaseAseDataTypes.BIGINT]: DataTypeName.BigIntNumber,
+    [SybaseAseDataTypes.INT]: DataTypeName.WholeNumber,
+    [SybaseAseDataTypes.TINYINT]: DataTypeName.WholeNumber,
+    [SybaseAseDataTypes.BIT]: DataTypeName.Boolean
+};
 export const PostgreSqlTypesToDataTypesMap: Record<PostgreSqlDataTypes, DataTypeName> = {
     [PostgreSqlDataTypes.BOOLEAN]: DataTypeName.Boolean,
     [PostgreSqlDataTypes.SMALLINT]: DataTypeName.WholeNumber,
@@ -65,4 +86,15 @@ export const DataTypeToSqlTypesMap: Record<DataTypeName, SQLDataTypes> = {
     [DataTypeName.Boolean]: SQLDataTypes.BIT,
     [DataTypeName.BigIntNumber]: SQLDataTypes.BIGINT,
     [DataTypeName.LargeString]: SQLDataTypes.TEXT
+};
+
+export const DataTypeToSybaseAseTypesMap: Record<DataTypeName, SybaseAseDataTypes> = {
+    [DataTypeName.WholeNumber]: SybaseAseDataTypes.INT,
+    [DataTypeName.Date]: SybaseAseDataTypes.DATE,
+    [DataTypeName.DateTime]: SybaseAseDataTypes.DATETIME,
+    [DataTypeName.FloatNumber]: SybaseAseDataTypes.FLOAT,
+    [DataTypeName.String]: SybaseAseDataTypes.VARCHAR,
+    [DataTypeName.Boolean]: SybaseAseDataTypes.BIT,
+    [DataTypeName.BigIntNumber]: SybaseAseDataTypes.BIGINT,
+    [DataTypeName.LargeString]: SybaseAseDataTypes.TEXT
 };

@@ -1,48 +1,85 @@
 import { DataTypeName } from "datapipe-js";
 import {
-    DataTypeToPostgreSqlTypesMap, DataTypeToSqlTypesMap,
-    PostgreSqlTypesToDataTypesMap, SqlTypesToDataTypesMap
+  DataTypeToPostgreSqlTypesMap,
+  DataTypeToSqlTypesMap,
+  DataTypeToSybaseAseTypesMap,
+  PostgreSqlTypesToDataTypesMap,
+  SqlTypesToDataTypesMap,
+  SybaseAseTypesToDataTypesMap,
 } from "./db-type-converter-maps";
-import { DbConnectionType, PostgreSqlDataTypes, SQLDataTypes } from "./db-types";
+import {
+  DbConnectionType,
+  PostgreSqlDataTypes,
+  SQLDataTypes,
+  SybaseAseDataTypes,
+} from "./db-types";
 
 export class DbTypeConverter {
-    toDbType(dbType: DataTypeName, connectionType: DbConnectionType): SQLDataTypes | PostgreSqlDataTypes {
-        if (connectionType === 'SqlServer' || connectionType === 'SqlServerSchema'){
-            return this.toSqlServerType(dbType);
-        }
-
-        if (connectionType === 'PostgreSql'){
-            return this.toPostgreSqlType(dbType);
-        }
-
-        throw new Error('Not Supported ConnectionType');
+  toDbType(
+    dbType: DataTypeName,
+    connectionType: DbConnectionType
+  ): SQLDataTypes | PostgreSqlDataTypes | SybaseAseDataTypes {
+    if (
+      connectionType === "SqlServer" ||
+      connectionType === "SqlServerSchema"
+    ) {
+      return this.toSqlServerType(dbType);
     }
 
-    fromDbType(dbType: SQLDataTypes | PostgreSqlDataTypes, connectionType: DbConnectionType): DataTypeName {
-        if (connectionType === 'SqlServer' || connectionType === 'SqlServerSchema'){
-            return this.fromSqlServerType(dbType as SQLDataTypes);
-        }
-
-        if (connectionType === 'PostgreSql'){
-            return this.fromPostgreSqlType(dbType as PostgreSqlDataTypes);
-        }
-
-        throw new Error('Not Supported ConnectionType');
+    if (connectionType === "PostgreSql") {
+      return this.toPostgreSqlType(dbType);
     }
 
-    toSqlServerType(dbType: DataTypeName): SQLDataTypes {
-        return DataTypeToSqlTypesMap[dbType];
+    if (connectionType === "SybaseAse") {
+      return this.toSybaseAseSqlType(dbType);
     }
 
-    toPostgreSqlType(dbType: DataTypeName): PostgreSqlDataTypes {
-        return DataTypeToPostgreSqlTypesMap[dbType];
+    throw new Error("Not Supported ConnectionType");
+  }
+
+  fromDbType(
+    dbType: SQLDataTypes | PostgreSqlDataTypes | SybaseAseDataTypes,
+    connectionType: DbConnectionType
+  ): DataTypeName {
+    if (
+      connectionType === "SqlServer" ||
+      connectionType === "SqlServerSchema"
+    ) {
+      return this.fromSqlServerType(dbType as SQLDataTypes);
     }
 
-    fromSqlServerType(dbType: SQLDataTypes): DataTypeName {
-        return SqlTypesToDataTypesMap[dbType];
+    if (connectionType === "PostgreSql") {
+      return this.fromPostgreSqlType(dbType as PostgreSqlDataTypes);
     }
 
-    fromPostgreSqlType(dbType: PostgreSqlDataTypes): DataTypeName {
-        return PostgreSqlTypesToDataTypesMap[dbType];
+    if (connectionType === "SybaseAse") {
+      return this.fromSybaseAseSqlType(dbType as SybaseAseDataTypes);
     }
+
+    throw new Error("Not Supported ConnectionType");
+  }
+
+  toSqlServerType(dbType: DataTypeName): SQLDataTypes {
+    return DataTypeToSqlTypesMap[dbType];
+  }
+
+  toSybaseAseSqlType(dbType: DataTypeName): SybaseAseDataTypes {
+    return DataTypeToSybaseAseTypesMap[dbType];
+  }
+
+  toPostgreSqlType(dbType: DataTypeName): PostgreSqlDataTypes {
+    return DataTypeToPostgreSqlTypesMap[dbType];
+  }
+
+  fromSqlServerType(dbType: SQLDataTypes): DataTypeName {
+    return SqlTypesToDataTypesMap[dbType];
+  }
+
+  fromSybaseAseSqlType(dbType: SybaseAseDataTypes): DataTypeName {
+    return SybaseAseTypesToDataTypesMap[dbType];
+  }
+
+  fromPostgreSqlType(dbType: PostgreSqlDataTypes): DataTypeName {
+    return PostgreSqlTypesToDataTypesMap[dbType];
+  }
 }
