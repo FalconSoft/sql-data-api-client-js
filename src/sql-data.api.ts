@@ -793,7 +793,7 @@ export class SqlDataApi {
       if (Array.isArray(val)) {
         return val.map((v) => scalarToPrimitive(v)) as PrimitiveType[];
       }
-      return val instanceof Date ? dateToString(val) : val;
+      return val instanceof Date ? `dt(${dateToString(val)})` : val;
     };
 
     const result: PrimitivesObject = {};
