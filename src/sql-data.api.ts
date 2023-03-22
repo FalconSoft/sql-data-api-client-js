@@ -9,6 +9,7 @@ import {
 } from "datapipe-js";
 import { dateToString, fromTable, toTable } from "datapipe-js/utils";
 import { DbTypeConverter } from "./db-type-converter";
+import { JoinType, TableJoinDto } from "./db-types";
 
 export * from "./db-types";
 
@@ -90,7 +91,7 @@ export interface SqlReadQueryInfo {
    * Examples:
    *  - ['InnerJoin', 'Customers c', 't.CustomerId = c.CustomerID'] - inner joins mainTable to Cutomers table
    */
-  joins?: [JoinType, string, string][];
+  joins?: [JoinType, string, string, string?][];
 }
 
 /**
@@ -396,12 +397,13 @@ export class SqlDataApi {
   join(
     joinType: JoinType,
     tableName: string,
-    joinCondition: string
+    joinCondition: string,
+    joinCondition2?: string
   ): SqlDataApi {
     if (!this.queryInfo.joins) {
       this.queryInfo.joins = [];
     }
-    this.queryInfo.joins.push([joinType, tableName, joinCondition]);
+    this.queryInfo.joins.push([joinType, tableName, joinCondition, joinCondition2]);
     return this;
   }
 
@@ -867,14 +869,16 @@ export class SqlDataApi {
       joins: TableJoinDto[],
       joinType: JoinType,
       tableOrViewWithAlias: string,
-      joinCondition: string
+      joinCondition: string,
+      joinCondition2?: string
     ): TableJoinDto[] {
       const nameAlias = extractNameAndAlias(tableOrViewWithAlias);
       joins.push({
-        joinCondition,
         joinType,
         tableAlias: nameAlias.alias,
         tableName: nameAlias.name,
+        joinCondition,
+        joinCondition2,
       });
       return joins;
     }
@@ -884,7 +888,7 @@ export class SqlDataApi {
 
     if (queryInfo.joins && queryInfo.joins.length) {
       for (const j of queryInfo.joins) {
-        join(tablesJoin, j[0] as JoinType, j[1], j[2]);
+        join(tablesJoin, j[0] as JoinType, j[1], j[2], j[3]);
       }
     }
 
@@ -956,18 +960,4 @@ interface RequestSqlQueryInfo {
   orderBy?: string;
   mainTableAlias?: string;
   tablesJoin?: TableJoinDto[];
-}
-
-enum JoinType {
-  InnerJoin = "InnerJoin",
-  LeftJoin = "LeftJoin",
-  RightJoin = "RightJoin",
-  FullJoin = "FullJoin",
-}
-
-interface TableJoinDto {
-  tableName: string;
-  tableAlias?: string;
-  joinType: JoinType;
-  joinCondition: string;
 }

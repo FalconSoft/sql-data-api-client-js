@@ -85,7 +85,7 @@ There are several ways you can define a query to the SQL Database. But, eventual
 - **filter** - defines a filter expression e.g. `country = 'uk' and city = 'London'` or you can use parameters and have filter as `country = @country AND city = @city` and provide parameters as an object`{country: 'UK', city: 'London'}`. And you can use SQL functions as well:  e.g.: `cast(TransactionTime as Date) = '2021-11-21'`
 - **orderBy** - define a columns to sort e.g.: `OrderDate DESC, OrderId ASC
 - **top**` - specify the number of records to return.
-- **join** - combine rows from two or more tables, based on a related column between them. You can define array `[JoinType, TableToJoin, JoinCondition]` or:  `['InnerJoin', 'Customers c', 'c.CustomerId = t.CustomerId']`
+- **join** - combine rows from two or more tables, based on a related column between them. You can define array `[JoinType, TableToJoin, JoinCondition, JoinCondition2]` or:  `['InnerJoin', 'Customers c', 'c.CustomerId = t.CustomerId']`
 
 ### Query Examples
 

@@ -108,3 +108,18 @@ export enum PostgreSqlDataTypes {
   // ENUM = 'Enum',
   // ARRAY = 'Array'
 }
+
+export enum JoinType {
+  InnerJoin = "InnerJoin",
+  LeftJoin = "LeftJoin",
+  RightJoin = "RightJoin",
+  FullJoin = "FullJoin",
+}
+
+export interface TableJoinDto {
+  tableName: string;
+  tableAlias?: string;
+  joinType: JoinType;
+  joinCondition: string;
+  joinCondition2?: string;
+}
