@@ -361,6 +361,27 @@ export class SqlDataApi {
     return this;
   }
 
+  // fluent API methods
+  /**
+   * Append filter (with AND) and returns same
+   * - use this method for a fluent API
+   * @param filter filter string e.g. "country='UK' or city=@city"
+   * @param filterParams filter parameters e.g. {city: 'London'}
+   * @returns same SqlDataApi instance
+   */
+  andFilter(
+    filter: string,
+    filterParams?: Record<string, ScalarType>
+  ): SqlDataApi {
+    const cf = this.queryInfo.filter || "";
+    this.queryInfo.filter = `${cf} ${cf ? " AND " : ""} ${filter}`.trim();
+    this.queryInfo.filterParams = {
+      ...(this.queryInfo.filterParams || {}),
+      ...filterParams,
+    };
+    return this;
+  }
+
   /**
    * sets fields that you want to setup
    * - use this method for a fluent API
@@ -403,7 +424,12 @@ export class SqlDataApi {
     if (!this.queryInfo.joins) {
       this.queryInfo.joins = [];
     }
-    this.queryInfo.joins.push([joinType, tableName, joinCondition, joinCondition2]);
+    this.queryInfo.joins.push([
+      joinType,
+      tableName,
+      joinCondition,
+      joinCondition2,
+    ]);
     return this;
   }
 
