@@ -291,6 +291,17 @@ Executes `sql` script in the server and returns either raw table or array of obj
 
 ```
 
+## Cancellation
+
+You can cancel any of your http request by setting `AbortController`
+
+```js
+setAbortController(abortController: AbortController): SqlDataApi
+```
+
+setAbortController is part of chaining method of sqlDataApi or you can pass it to the constructor and factory method
+
+
 ## License
 
 A permissive MIT License (c) FalconSoft Ltd.

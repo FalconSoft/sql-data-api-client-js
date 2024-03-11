@@ -182,7 +182,8 @@ export async function authenticate(
  */
 export function sqlDataApi(
   connectionName: string,
-  config?: { baseUrl?: string; userAccessToken?: string; bearerToken?: string }
+  config?: { baseUrl?: string; userAccessToken?: string; bearerToken?: string },
+  abortController?: AbortController
 ): SqlDataApi {
   const cfg = {
     userAccessToken: config?.userAccessToken || SqlDataApi.UserAccessToken,
@@ -191,7 +192,8 @@ export function sqlDataApi(
   return new SqlDataApi(
     config?.baseUrl || SqlDataApi.BaseUrl,
     connectionName,
-    cfg
+    cfg,
+    abortController
   );
 }
 
@@ -338,8 +340,9 @@ export class SqlDataApi {
   constructor(
     private baseUrl: string,
     private connectionName: string,
-    config: { userAccessToken?: string; bearerToken?: string }
-  ) {
+    config: { userAccessToken?: string; bearerToken?: string },
+    private abortController?: AbortController
+    ) {
     this.userAccessToken = config?.userAccessToken;
     this.bearerToken = config?.bearerToken;
   }
@@ -476,6 +479,11 @@ export class SqlDataApi {
     );
   }
 
+  setAbortController(abortController: AbortController): SqlDataApi {
+    this.abortController = abortController;
+    return this;
+  }
+
   /**
    * Updates data in the table based on filter parameters
    * @returns Number of rows affected
@@ -506,9 +514,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const res = await httpRequest("POST", url, dto, {
-      headers: { ...appHttpHeaders, ...headers },
-    });
+    const httpConfig: AxiosRequestConfig = {
+      headers: Object.assign(appHttpHeaders, headers),
+    };
+
+    if (this.abortController) {
+      httpConfig.signal = this.abortController.signal;
+    }
+
+    const res = await httpRequest("POST", url, dto, httpConfig);
 
     if (res.errorMessage) {
       throw new Error(res.errorMessage);
@@ -543,9 +557,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const res = await httpRequest("POST", url, dto, {
-      headers: { ...appHttpHeaders, ...headers },
-    });
+    const httpConfig: AxiosRequestConfig = {
+      headers: Object.assign(appHttpHeaders, headers),
+    };
+
+    if (this.abortController) {
+      httpConfig.signal = this.abortController.signal;
+    }
+
+    const res = await httpRequest("POST", url, dto, httpConfig);
 
     if (res.errorMessage) {
       throw new Error(res.errorMessage);
@@ -622,9 +642,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const res = await httpRequest("POST", url, dto, {
-      headers: { ...appHttpHeaders, ...headers },
-    });
+    const httpConfig: AxiosRequestConfig = {
+      headers: Object.assign(appHttpHeaders, headers),
+    };
+
+    if (this.abortController) {
+      httpConfig.signal = this.abortController.signal;
+    }
+
+    const res = await httpRequest("POST", url, dto, httpConfig);
 
     if (res.errorMessage) {
       throw new Error(res.errorMessage);
@@ -672,9 +698,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const res = await httpRequest("POST", url, dto, {
-      headers: { ...appHttpHeaders, ...headers },
-    });
+    const httpConfig: AxiosRequestConfig = {
+      headers: Object.assign(appHttpHeaders, headers),
+    };
+
+    if (this.abortController) {
+      httpConfig.signal = this.abortController.signal;
+    }
+
+    const res = await httpRequest("POST", url, dto, httpConfig);
 
     if (res.errorMessage) {
       throw new Error(res.errorMessage);
@@ -733,11 +765,19 @@ export class SqlDataApi {
 
     if (!items || !items.length) {
       if (itemsToDelete?.length) {
+        const httpConfig: AxiosRequestConfig = {
+          headers: Object.assign(appHttpHeaders, headersValue),
+        };
+
+        if (this.abortController) {
+          httpConfig.signal = this.abortController.signal;
+        }
+
         const res = await httpRequest(
           "POST",
           url,
           { itemsToDelete },
-          { headers: { ...appHttpHeaders, ...headersValue } }
+          httpConfig
         );
 
         if (res.errorMessage) {
@@ -788,9 +828,16 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
           }
 
-          const res = await httpRequest("POST", url, body, {
+          const httpConfig: AxiosRequestConfig = {
             headers: Object.assign(appHttpHeaders, headersValue),
-          });
+          };
+
+          if (this.abortController) {
+            if (this.abortController.signal?.aborted) break;
+            httpConfig.signal = this.abortController.signal;
+          }
+
+          const res = await httpRequest("POST", url, body, httpConfig);
 
           if (res.errorMessage) {
             throw new Error(res.errorMessage);
@@ -949,9 +996,15 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const res = await httpRequest("POST", url, request, {
+    const httpConfig = {
       headers: { ...appHttpHeaders, ...headers },
-    });
+    } as AxiosRequestConfig;
+
+    if (this.abortController) {
+      httpConfig.signal = this.abortController.signal;
+    }
+
+    const res = await httpRequest("POST", url, request, httpConfig);
 
     if (res.errorMessage) {
       throw new Error(res.errorMessage);
