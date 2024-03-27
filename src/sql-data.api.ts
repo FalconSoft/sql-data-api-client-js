@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig } from "axios";
+import axios, { AxiosRequestConfig, isCancel } from "axios";
 import {
   PrimitivesObject,
   PrimitiveType,
@@ -236,8 +236,13 @@ export function httpRequest<TRequest, TResponse>(
         response.data ||
         response.statusText ||
         "Http Connection Error";
+
       if (typeof errorMessage === "object") {
         errorMessage = JSON.stringify(errorMessage);
+      }
+
+      if (isCancel(e)) {
+        errorMessage = "Request cancelled";
       }
 
       return {
@@ -342,7 +347,7 @@ export class SqlDataApi {
     private connectionName: string,
     config: { userAccessToken?: string; bearerToken?: string },
     private abortController?: AbortController
-    ) {
+  ) {
     this.userAccessToken = config?.userAccessToken;
     this.bearerToken = config?.bearerToken;
   }
