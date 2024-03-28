@@ -183,7 +183,7 @@ export async function authenticate(
 export function sqlDataApi(
   connectionName: string,
   config?: { baseUrl?: string; userAccessToken?: string; bearerToken?: string },
-  abortController?: AbortController
+  abortSignal?: AbortSignal
 ): SqlDataApi {
   const cfg = {
     userAccessToken: config?.userAccessToken || SqlDataApi.UserAccessToken,
@@ -193,7 +193,7 @@ export function sqlDataApi(
     config?.baseUrl || SqlDataApi.BaseUrl,
     connectionName,
     cfg,
-    abortController
+    abortSignal
   );
 }
 
@@ -346,7 +346,7 @@ export class SqlDataApi {
     private baseUrl: string,
     private connectionName: string,
     config: { userAccessToken?: string; bearerToken?: string },
-    private abortController?: AbortController
+    private abortSignal?: AbortSignal
   ) {
     this.userAccessToken = config?.userAccessToken;
     this.bearerToken = config?.bearerToken;
@@ -484,8 +484,8 @@ export class SqlDataApi {
     );
   }
 
-  setAbortController(abortController: AbortController): SqlDataApi {
-    this.abortController = abortController;
+  setAbortSignal(signal: AbortSignal): SqlDataApi {
+    this.abortSignal = signal;
     return this;
   }
 
@@ -523,8 +523,8 @@ export class SqlDataApi {
       headers: Object.assign(appHttpHeaders, headers),
     };
 
-    if (this.abortController) {
-      httpConfig.signal = this.abortController.signal;
+    if (this.abortSignal) {
+      httpConfig.signal = this.abortSignal;
     }
 
     const res = await httpRequest("POST", url, dto, httpConfig);
@@ -566,8 +566,8 @@ export class SqlDataApi {
       headers: Object.assign(appHttpHeaders, headers),
     };
 
-    if (this.abortController) {
-      httpConfig.signal = this.abortController.signal;
+    if (this.abortSignal) {
+      httpConfig.signal = this.abortSignal;
     }
 
     const res = await httpRequest("POST", url, dto, httpConfig);
@@ -651,8 +651,8 @@ export class SqlDataApi {
       headers: Object.assign(appHttpHeaders, headers),
     };
 
-    if (this.abortController) {
-      httpConfig.signal = this.abortController.signal;
+    if (this.abortSignal) {
+      httpConfig.signal = this.abortSignal;
     }
 
     const res = await httpRequest("POST", url, dto, httpConfig);
@@ -707,8 +707,8 @@ export class SqlDataApi {
       headers: Object.assign(appHttpHeaders, headers),
     };
 
-    if (this.abortController) {
-      httpConfig.signal = this.abortController.signal;
+    if (this.abortSignal) {
+      httpConfig.signal = this.abortSignal;
     }
 
     const res = await httpRequest("POST", url, dto, httpConfig);
@@ -774,8 +774,8 @@ export class SqlDataApi {
           headers: Object.assign(appHttpHeaders, headersValue),
         };
 
-        if (this.abortController) {
-          httpConfig.signal = this.abortController.signal;
+        if (this.abortSignal) {
+          httpConfig.signal = this.abortSignal;
         }
 
         const res = await httpRequest(
@@ -837,9 +837,9 @@ export class SqlDataApi {
             headers: Object.assign(appHttpHeaders, headersValue),
           };
 
-          if (this.abortController) {
-            if (this.abortController.signal?.aborted) break;
-            httpConfig.signal = this.abortController.signal;
+          if (this.abortSignal) {
+            if (this.abortSignal?.aborted) break;
+            httpConfig.signal = this.abortSignal;
           }
 
           const res = await httpRequest("POST", url, body, httpConfig);
@@ -1005,8 +1005,8 @@ export class SqlDataApi {
       headers: { ...appHttpHeaders, ...headers },
     } as AxiosRequestConfig;
 
-    if (this.abortController) {
-      httpConfig.signal = this.abortController.signal;
+    if (this.abortSignal) {
+      httpConfig.signal = this.abortSignal;
     }
 
     const res = await httpRequest("POST", url, request, httpConfig);

@@ -1,6 +1,6 @@
 {
   "name": "sql-data-api",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "Sql Data Api client for Javascript",
   "keywords": [
     "sql",
