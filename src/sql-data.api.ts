@@ -119,12 +119,49 @@ export interface SqlSaveOptions {
   batchProgressFunc?: (processedCount: number, status: SqlSaveStatus) => void;
 }
 
-export interface SqlQueryResponse {
-  message?: string;
+/**
+ * Column metadata returned alongside every result set
+ */
+export interface SqlResultFieldInfo {
+  fieldName: string;
+  dataType: string;
+}
+
+/**
+ * A single result set returned by a SQL script or stored procedure.
+ * Either `table` or `items` is populated, depending on the requested output type
+ */
+export interface SqlResultSet {
   table?: TableDto;
+  items?: PrimitivesObject[];
+  fields?: SqlResultFieldInfo[];
+}
+
+export interface SqlQueryResponse extends SqlResultSet {
+  message?: string;
   outputParameters?: Record<string, any>;
   resultType: "Table" | "Items";
-  items?: PrimitivesObject[];
+  /**
+   * Result sets after the first one, when a script (several SELECT statements)
+   * or a stored procedure returns more than one. The first result set stays in `table` / `items`.
+   */
+  additionalResultSets?: SqlResultSet[];
+}
+
+/**
+ * Result of `sqlExecuteMultiple`: every result set of the script as an array of objects
+ */
+export interface SqlExecuteResult {
+  /**
+   * All result sets in the order the database returned them.
+   * Empty when no statement produced rows (e.g. a plain UPDATE)
+   */
+  resultSets: ScalarObject[][];
+  /**
+   * Server message, e.g. "3 records affected."
+   */
+  message?: string;
+  outputParameters?: Record<string, any>;
 }
 
 /**
@@ -466,6 +503,11 @@ export class SqlDataApi {
     );
     // reset query that it is not used in another call
     this.queryInfo = {};
+
+    if (this.abortSignal?.aborted) {
+      throw new Error("Request cancelled...");
+    }
+
     return result;
   }
 
@@ -484,7 +526,7 @@ export class SqlDataApi {
     );
   }
 
-  setAbortSignal(signal: AbortSignal): SqlDataApi {
+  setAbortSignal(signal?: AbortSignal): SqlDataApi {
     this.abortSignal = signal;
     return this;
   }
@@ -732,6 +774,34 @@ export class SqlDataApi {
   ): Promise<ScalarObject[] | unknown> {
     const response = await this.sqlExecuteRaw(sql, params);
     return response ? fromTable(response.table as TableDto) : response;
+  }
+
+  /**
+   * Executes a SQL script (several statements) or a stored procedure that returns more than one result set
+   * @returns every result set as an array of objects, plus the server message and output parameters
+   */
+  async sqlExecuteMultiple(
+    sql: string,
+    params?: ScalarObject,
+    paramDirections?: Record<string, string>
+  ): Promise<SqlExecuteResult> {
+    const response = await this.sqlExecuteRaw(sql, params, paramDirections);
+    if (!response) {
+      return { resultSets: [] };
+    }
+
+    const resultSets = [response, ...(response.additionalResultSets || [])]
+      // a statement without rows (UPDATE/DELETE) comes back as a table with no columns
+      .filter((set) => set.items || set.table?.fieldNames?.length)
+      .map((set) =>
+        set.table ? (fromTable(set.table) as ScalarObject[]) : (set.items as ScalarObject[])
+      );
+
+    return {
+      resultSets,
+      message: response.message,
+      outputParameters: response.outputParameters,
+    };
   }
 
   private async saveData(

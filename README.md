@@ -291,6 +291,24 @@ Executes `sql` script in the server and returns either raw table or array of obj
 
 ```
 
+### Multiple result sets
+
+A script with several `SELECT` statements (or a stored procedure that returns several result sets) can be executed with `sqlExecuteMultiple`. Every result set comes back as an array of objects, in the order the database returned them. Statements that do not return rows (`UPDATE`, `DELETE`) are not included; their row counts are reported in `message`.
+
+```js
+  async sqlExecuteMultiple(
+    sql: string,
+    params?: ScalarObject,
+    paramDirections?: Record<string, string>
+  ): Promise<SqlExecuteResult>
+
+  const { resultSets, message } = await sqlDataApi('myConnection')
+    .sqlExecuteMultiple('SELECT * FROM Orders; SELECT * FROM Customers');
+  // resultSets[0] -> orders, resultSets[1] -> customers
+```
+
+`sqlExecuteRaw` exposes the same data untouched: the first result set in `table`, the rest in `additionalResultSets`.
+
 ## Cancellation
 
 You can cancel any of your http request by setting `AbortController`
