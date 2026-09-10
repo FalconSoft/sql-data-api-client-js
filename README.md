@@ -18,6 +18,7 @@ SQL Data Api client for Javascript
     * [Multiple result sets](#multiple-result-sets)
  - [Dates and parameters](#dates-and-parameters)
  - [Cancellation](#cancellation)
+ - [Custom transport](#custom-transport)
  - [License](#license)
 
 ## Install
@@ -473,6 +474,40 @@ await request; // rejects with Error("Request cancelled")
 ```
 
 For batched saves, aborting stops before the next batch is sent.
+
+## Custom transport
+
+By default every request is sent with axios. When the library runs in an environment where plain HTTP
+is not available or not wanted (for example inside a desktop host that talks to the server in-process),
+the whole HTTP layer can be replaced with a single function:
+
+```js
+import { setRequestHandler } from 'sql-data-api';
+
+setRequestHandler(async (request) => {
+  // request: { method, url, body, headers, signal, config }
+  //   method  - 'GET' | 'POST' | 'PUT' | 'DELETE'
+  //   url     - absolute URL built from the base URL (may carry ?$accessToken=)
+  //   body    - the raw request body (object), undefined when there is none
+  //   headers - merged headers, including 'Authorization' and 'Content-Type'
+  //   signal  - optional AbortSignal
+  const reply = await myBridge.send(request);
+
+  // must resolve (never reject) with:
+  return {
+    data: reply.body,          // parsed response body
+    isOk: reply.status < 400,
+    status: reply.status,      // 0 for transport-level failures
+    statusText: reply.statusText,
+    errorMessage: reply.status < 400 ? undefined : reply.message, // makes the wrappers throw
+  };
+});
+
+setRequestHandler(null); // restore the default axios transport
+```
+
+`setRequestHandler` affects every `sqlDataApi(...)` instance as well as `httpGet`, `httpPost`, `httpPut`,
+`httpDelete` and `authenticate`. Report cancellation with `errorMessage: "Request cancelled"`.
 
 
 ## License

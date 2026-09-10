@@ -238,26 +238,115 @@ export function dbTypeConverter(): DbTypeConverter {
   return new DbTypeConverter();
 }
 
+export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+/**
+ * One request as handed to a request handler (see `setRequestHandler`).
+ */
+export interface HttpRequestInfo {
+  method: HttpMethod;
+  /**
+   * Absolute URL, e.g. `${baseUrl}/sql-data-api/conn/query/dbo.Table` (may carry `?$accessToken=`)
+   */
+  url: string;
+  /**
+   * Raw (NOT serialized) request body; undefined when there is none
+   */
+  body?: unknown;
+  /**
+   * Merged headers. "Content-Type: application/json" is added when a body is present and none was given
+   */
+  headers: Record<string, string>;
+  signal?: AbortSignal;
+  /**
+   * Remaining options passed as `config` to httpRequest (axios specific: timeout, responseType...)
+   */
+  config?: Record<string, any>;
+}
+
+/**
+ * A function that performs the HTTP request on behalf of this library.
+ * It must never reject: report failures through `errorMessage` (status 0 for transport-level failures).
+ */
+export type HttpRequestHandler = (
+  request: HttpRequestInfo
+) => Promise<ServerResponse<any>>;
+
+let requestHandler: HttpRequestHandler = axiosRequestHandler;
+
+/**
+ * Replaces the HTTP layer used by every call of this library (query, save, execute, httpGet/httpPost...).
+ * Useful when requests have to travel through something other than plain HTTP (e.g. a host bridge).
+ * Pass undefined/null to restore the default axios implementation.
+ */
+export function setRequestHandler(handler?: HttpRequestHandler | null): void {
+  requestHandler = handler || axiosRequestHandler;
+}
+
+export function getRequestHandler(): HttpRequestHandler {
+  return requestHandler;
+}
+
 export function httpRequest<TRequest, TResponse>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: HttpMethod,
   url: string,
   body?: TRequest,
   config?: Record<string, any>
 ): Promise<ServerResponse<TResponse>> {
-  const requestConfig: AxiosRequestConfig = { method, url, ...(config || {}) };
+  const cfg = config || {};
+  const headers: Record<string, string> = { ...(cfg.headers || {}) };
+  if (body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
-  if (body) {
-    requestConfig.data = typeof body === "object" ? JSON.stringify(body) : body;
-    if (!requestConfig.headers) {
-      requestConfig.headers = {};
-    }
-    if (!requestConfig.headers["Content-Type"]) {
-      requestConfig.headers["Content-Type"] = "application/json";
-    }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { headers: _ignored, signal, ...rest } = cfg;
+  const request: HttpRequestInfo = {
+    method,
+    url,
+    body: body || undefined,
+    headers,
+    signal,
+    config: rest,
+  };
+
+  return Promise.resolve()
+    .then(() => requestHandler(request))
+    .then(
+      (r) => r as ServerResponse<TResponse>,
+      (e): ServerResponse<TResponse> => ({
+        isOk: false,
+        status: 0,
+        statusText: "",
+        data: null as any,
+        errorMessage: (e && e.message) || "Http Connection Error",
+      })
+    );
+}
+
+function axiosRequestHandler(
+  request: HttpRequestInfo
+): Promise<ServerResponse<any>> {
+  const requestConfig: AxiosRequestConfig = {
+    ...(request.config || {}),
+    method: request.method,
+    url: request.url,
+    headers: request.headers,
+  };
+
+  if (request.signal) {
+    requestConfig.signal = request.signal;
+  }
+
+  if (request.body !== undefined) {
+    requestConfig.data =
+      typeof request.body === "object"
+        ? JSON.stringify(request.body)
+        : request.body;
   }
 
   return axios.request(requestConfig).then(
-    (r: ServerResponse<TResponse>): ServerResponse<TResponse> => ({
+    (r): ServerResponse<any> => ({
       data: r.data,
       isOk: true,
       status: r.status,
@@ -562,7 +651,7 @@ export class SqlDataApi {
     }
 
     const httpConfig: AxiosRequestConfig = {
-      headers: Object.assign(appHttpHeaders, headers),
+      headers: { ...appHttpHeaders, ...headers },
     };
 
     if (this.abortSignal) {
@@ -605,7 +694,7 @@ export class SqlDataApi {
     }
 
     const httpConfig: AxiosRequestConfig = {
-      headers: Object.assign(appHttpHeaders, headers),
+      headers: { ...appHttpHeaders, ...headers },
     };
 
     if (this.abortSignal) {
@@ -690,7 +779,7 @@ export class SqlDataApi {
     }
 
     const httpConfig: AxiosRequestConfig = {
-      headers: Object.assign(appHttpHeaders, headers),
+      headers: { ...appHttpHeaders, ...headers },
     };
 
     if (this.abortSignal) {
@@ -746,7 +835,7 @@ export class SqlDataApi {
     }
 
     const httpConfig: AxiosRequestConfig = {
-      headers: Object.assign(appHttpHeaders, headers),
+      headers: { ...appHttpHeaders, ...headers },
     };
 
     if (this.abortSignal) {
@@ -841,7 +930,7 @@ export class SqlDataApi {
     if (!items || !items.length) {
       if (itemsToDelete?.length) {
         const httpConfig: AxiosRequestConfig = {
-          headers: Object.assign(appHttpHeaders, headersValue),
+          headers: { ...appHttpHeaders, ...headersValue },
         };
 
         if (this.abortSignal) {
@@ -904,7 +993,7 @@ export class SqlDataApi {
           }
 
           const httpConfig: AxiosRequestConfig = {
-            headers: Object.assign(appHttpHeaders, headersValue),
+            headers: { ...appHttpHeaders, ...headersValue },
           };
 
           if (this.abortSignal) {
@@ -1097,7 +1186,10 @@ interface ExecuteSqlDto {
   paramDirections?: Record<string, string>;
 }
 
-interface ServerResponse<T> {
+/**
+ * The result of a single HTTP request as seen by this library. Never thrown; `errorMessage` signals failure.
+ */
+export interface ServerResponse<T> {
   data: T;
   isOk?: boolean;
   status: number;

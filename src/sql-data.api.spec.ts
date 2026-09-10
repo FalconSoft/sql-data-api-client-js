@@ -1,4 +1,52 @@
-import { SqlDataApi, SqlQueryResponse } from "./sql-data.api";
+import {
+  HttpRequestInfo,
+  ServerResponse,
+  SqlDataApi,
+  SqlQueryResponse,
+  httpGet,
+  setRequestHandler,
+} from "./sql-data.api";
+
+describe("setRequestHandler", () => {
+  afterEach(() => setRequestHandler(null));
+
+  function ok<T>(data: T): ServerResponse<T> {
+    return { data, isOk: true, status: 200, statusText: "OK" };
+  }
+
+  it("routes every request of the library through the handler", async () => {
+    const handler = jest.fn((_: HttpRequestInfo) =>
+      Promise.resolve(ok({ resultType: "Table", table: { fieldNames: [], fieldDataTypes: [], rows: [] } }))
+    );
+    setRequestHandler(handler);
+
+    const api = new SqlDataApi("http://h", "conn", { bearerToken: "t" });
+    await api.sqlExecuteRaw("select 1");
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    const request = handler.mock.calls[0][0];
+    expect(request.method).toBe("POST");
+    expect(request.url).toBe("http://h/sql-data-api/conn/execute");
+    expect(request.headers.Authorization).toBe("Bearer t");
+    expect(request.headers["Content-Type"]).toBe("application/json");
+    expect(typeof request.body).toBe("object");
+    expect((request.body as { sql: string }).sql).toBe("select 1");
+  });
+
+  it("throws the handler's errorMessage from the wrappers", async () => {
+    setRequestHandler(() =>
+      Promise.resolve({ data: null, isOk: false, status: 400, statusText: "Bad Request", errorMessage: "boom" })
+    );
+
+    await expect(httpGet("http://h/x")).rejects.toThrow("boom");
+  });
+
+  it("turns a rejecting handler into an errorMessage instead of an unhandled rejection", async () => {
+    setRequestHandler(() => Promise.reject(new Error("bridge down")));
+
+    await expect(httpGet("http://h/x")).rejects.toThrow("bridge down");
+  });
+});
 
 describe("sqlExecuteMultiple", () => {
   const api = new SqlDataApi("http://localhost", "conn", { bearerToken: "t" });
