@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`sql-data-api` is a small TypeScript client library (published to npm) for the Worksheet Systems / FalconSoft "SQL Data API" HTTP service. It lets JavaScript callers query, save, update, delete and execute SQL against a named server-side connection without writing raw HTTP. There is no server code here; every method ultimately POSTs a JSON DTO to `{baseUrl}/sql-data-api/{connectionName}/<verb>/...` via axios.
+`sql-data-api` is a small TypeScript client library (published to npm) for the Worksheet Systems / FalconSoft "SQL Data API" HTTP service. It lets JavaScript callers query, save, update, delete and execute SQL against a named server-side connection without writing raw HTTP. There is no server code here; every method ultimately POSTs a JSON DTO to `{baseUrl}/sql-data-api/{connectionName}/<verb>/...` via the platform `fetch` (no HTTP dependency).
 
 ## Commands
 
@@ -44,9 +44,9 @@ Tooling is pinned old on purpose: TypeScript 4.5, ESLint 7 with `@typescript-esl
 
 **Saves are batched client-side.** `saveData` converts items to a table and POSTs chunks bounded by `batchSize` rows (default 10000) or ~1.5 MB of JSON, summing `inserted/updated/deleted` across chunks and invoking `batchProgressFunc` after each. `method` picks the endpoint: `save` (upsert), `append-data`, or `bulk-insert`. Passing an array as the third arg to `save()` means "items to delete" rather than options.
 
-**Errors.** `httpRequest` never rejects; it returns `{isOk, errorMessage}` and the wrappers throw `Error(errorMessage)`. Axios cancellation becomes the message `"Request cancelled"`; `query()` additionally throws if the `AbortSignal` is already aborted after the call.
+**Errors.** `httpRequest` never rejects; it returns `{isOk, errorMessage}` and the wrappers throw `Error(errorMessage)`. An aborted fetch becomes the message `"Request cancelled"`; `query()` additionally throws if the `AbortSignal` is already aborted after the call.
 
-**Build.** `rollup.config.js` emits two bundles from one entry: UMD (`dist/sql-data-api.min.js`, terser, globals `Axios`/`dataPipeJs`/`dataPipeJsUtils`) and ESM (`dist/sql-data-api.esm.js`). `axios`, `datapipe-js` and `datapipe-js/utils` are externals. A custom `flattenDeclarations` plugin moves `.d.ts` files from `dist/src/` up to `dist/` because rollup-plugin-typescript2 ignores `rootDir` on Windows.
+**Build.** `rollup.config.js` emits two bundles from one entry: UMD (`dist/sql-data-api.min.js`, terser, globals `dataPipeJs`/`dataPipeJsUtils`) and ESM (`dist/sql-data-api.esm.js`). `datapipe-js` and `datapipe-js/utils` are externals. A custom `flattenDeclarations` plugin moves `.d.ts` files from `dist/src/` up to `dist/` because rollup-plugin-typescript2 ignores `rootDir` on Windows.
 
 ## Conventions
 

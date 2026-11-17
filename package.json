@@ -1,6 +1,6 @@
 {
   "name": "sql-data-api",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Sql Data Api client for Javascript",
   "keywords": [
     "sql",
@@ -35,7 +35,6 @@
   },
   "homepage": "https://github.com/FalconSoft/sql-data-api-client-js",
   "dependencies": {
-    "axios": "^1.6.7",
     "datapipe-js": "^0.3.31"
   },
   "devDependencies": {

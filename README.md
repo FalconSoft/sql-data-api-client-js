@@ -477,7 +477,7 @@ For batched saves, aborting stops before the next batch is sent.
 
 ## Custom transport
 
-By default every request is sent with axios. When the library runs in an environment where plain HTTP
+By default every request is sent with the platform's `fetch` (browsers, Node 18+). When the library runs in an environment where plain HTTP
 is not available or not wanted (for example inside a desktop host that talks to the server in-process),
 the whole HTTP layer can be replaced with a single function:
 
@@ -503,7 +503,7 @@ setRequestHandler(async (request) => {
   };
 });
 
-setRequestHandler(null); // restore the default axios transport
+setRequestHandler(null); // restore the default fetch transport
 ```
 
 `setRequestHandler` affects every `sqlDataApi(...)` instance as well as `httpGet`, `httpPost`, `httpPut`,

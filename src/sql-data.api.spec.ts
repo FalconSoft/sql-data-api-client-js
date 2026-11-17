@@ -4,8 +4,83 @@ import {
   SqlDataApi,
   SqlQueryResponse,
   httpGet,
+  httpPost,
   setRequestHandler,
 } from "./sql-data.api";
+
+describe("default fetch transport", () => {
+  const originalFetch = (global as any).fetch;
+  afterEach(() => {
+    (global as any).fetch = originalFetch;
+  });
+
+  function reply(status: number, body: string, statusText = "") {
+    return { ok: status >= 200 && status < 300, status, statusText, text: () => Promise.resolve(body) };
+  }
+
+  it("sends a serialized body with headers and parses a JSON response", async () => {
+    const fetchMock = jest.fn((_url: string, _init: any) => Promise.resolve(reply(200, '{"a":1}', "OK")));
+    (global as any).fetch = fetchMock;
+
+    const result = await httpPost("http://h/x", { q: 1 }, { headers: { Authorization: "Bearer t" } });
+
+    expect(result).toEqual({ a: 1 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://h/x");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe('{"q":1}');
+    expect(init.headers).toEqual({ Authorization: "Bearer t", "Content-Type": "application/json" });
+  });
+
+  it("returns non-JSON responses as text", async () => {
+    (global as any).fetch = jest.fn(() => Promise.resolve(reply(200, "plain text")));
+
+    await expect(httpGet("http://h/x")).resolves.toBe("plain text");
+  });
+
+  it("throws the message from an error response body", async () => {
+    (global as any).fetch = jest.fn(() => Promise.resolve(reply(400, '{"message":"bad sql"}', "Bad Request")));
+
+    await expect(httpGet("http://h/x")).rejects.toThrow("bad sql");
+  });
+
+  it("falls back to the status text when an error response has no body", async () => {
+    (global as any).fetch = jest.fn(() => Promise.resolve(reply(500, "", "Internal Server Error")));
+
+    await expect(httpGet("http://h/x")).rejects.toThrow("Internal Server Error");
+  });
+
+  it("reports a network failure as a connection error", async () => {
+    (global as any).fetch = jest.fn(() => Promise.reject(new TypeError("fetch failed")));
+
+    await expect(httpGet("http://h/x")).rejects.toThrow("Http Connection Error");
+  });
+
+  // rejects like the real fetch once the signal it was given aborts
+  function hangingFetch(_url: string, init: any): Promise<never> {
+    return new Promise((_, reject) => {
+      const fail = () => reject(new Error("aborted"));
+      if (init.signal.aborted) fail();
+      else init.signal.addEventListener("abort", fail);
+    });
+  }
+
+  it("reports an aborted request as cancelled", async () => {
+    (global as any).fetch = jest.fn(hangingFetch);
+    const controller = new AbortController();
+
+    const request = httpGet("http://h/x", { signal: controller.signal });
+    controller.abort();
+
+    await expect(request).rejects.toThrow("Request cancelled");
+  });
+
+  it("aborts the request after config.timeout", async () => {
+    (global as any).fetch = jest.fn(hangingFetch);
+
+    await expect(httpGet("http://h/x", { timeout: 10 })).rejects.toThrow("timeout of 10ms exceeded");
+  });
+});
 
 describe("setRequestHandler", () => {
   afterEach(() => setRequestHandler(null));

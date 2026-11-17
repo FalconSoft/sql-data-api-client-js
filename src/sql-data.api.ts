@@ -1,4 +1,3 @@
-import axios, { AxiosRequestConfig, isCancel } from "axios";
 import {
   PrimitivesObject,
   PrimitiveType,
@@ -259,7 +258,8 @@ export interface HttpRequestInfo {
   headers: Record<string, string>;
   signal?: AbortSignal;
   /**
-   * Remaining options passed as `config` to httpRequest (axios specific: timeout, responseType...)
+   * Remaining options passed as `config` to httpRequest (the default transport understands `timeout` in ms
+   * and forwards the rest to fetch as RequestInit options: credentials, mode, cache...)
    */
   config?: Record<string, any>;
 }
@@ -272,15 +272,15 @@ export type HttpRequestHandler = (
   request: HttpRequestInfo
 ) => Promise<ServerResponse<any>>;
 
-let requestHandler: HttpRequestHandler = axiosRequestHandler;
+let requestHandler: HttpRequestHandler = fetchRequestHandler;
 
 /**
  * Replaces the HTTP layer used by every call of this library (query, save, execute, httpGet/httpPost...).
  * Useful when requests have to travel through something other than plain HTTP (e.g. a host bridge).
- * Pass undefined/null to restore the default axios implementation.
+ * Pass undefined/null to restore the default fetch implementation.
  */
 export function setRequestHandler(handler?: HttpRequestHandler | null): void {
-  requestHandler = handler || axiosRequestHandler;
+  requestHandler = handler || fetchRequestHandler;
 }
 
 export function getRequestHandler(): HttpRequestHandler {
@@ -324,62 +324,102 @@ export function httpRequest<TRequest, TResponse>(
     );
 }
 
-function axiosRequestHandler(
+async function fetchRequestHandler(
   request: HttpRequestInfo
 ): Promise<ServerResponse<any>> {
-  const requestConfig: AxiosRequestConfig = {
-    ...(request.config || {}),
-    method: request.method,
-    url: request.url,
-    headers: request.headers,
-  };
+  const { timeout, ...init } = request.config || {};
+  const userSignal = request.signal;
 
-  if (request.signal) {
-    requestConfig.signal = request.signal;
+  // one controller covers both the caller's signal and the optional timeout
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  if (userSignal) {
+    if (userSignal.aborted) {
+      controller.abort();
+    } else {
+      userSignal.addEventListener("abort", onAbort);
+    }
   }
 
-  if (request.body !== undefined) {
-    requestConfig.data =
-      typeof request.body === "object"
-        ? JSON.stringify(request.body)
-        : request.body;
+  if (timeout > 0) {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeout);
   }
 
-  return axios.request(requestConfig).then(
-    (r): ServerResponse<any> => ({
-      data: r.data,
-      isOk: true,
-      status: r.status,
-      statusText: r.statusText,
-    }),
-    (e) => {
-      // making an error more informative.
-      // this was a reason why we switched to axios, as it gives us a real exception details,
-      // beyond a statusText
-      const response = e.response || {};
-      let errorMessage =
-        (response.data || {}).message ||
-        response.data ||
-        response.statusText ||
-        "Http Connection Error";
+  try {
+    const response = await fetch(request.url, {
+      ...init,
+      method: request.method,
+      headers: request.headers,
+      signal: controller.signal,
+      body:
+        request.body === undefined
+          ? undefined
+          : typeof request.body === "object"
+          ? JSON.stringify(request.body)
+          : String(request.body),
+    });
 
-      if (typeof errorMessage === "object") {
-        errorMessage = JSON.stringify(errorMessage);
-      }
+    // parse JSON when possible, otherwise keep the text as is
+    const text = await response.text();
+    let data: any = text;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // not JSON
+    }
 
-      if (isCancel(e)) {
-        errorMessage = "Request cancelled";
-      }
-
+    if (response.ok) {
       return {
-        isOk: false,
+        data,
+        isOk: true,
         status: response.status,
         statusText: response.statusText,
-        data: null as any,
-        errorMessage,
       };
     }
-  );
+
+    // making an error more informative: prefer the details from the response body over a statusText
+    let errorMessage =
+      (data || {}).message ||
+      data ||
+      response.statusText ||
+      `Http Error ${response.status}`;
+
+    if (typeof errorMessage === "object") {
+      errorMessage = JSON.stringify(errorMessage);
+    }
+
+    return {
+      isOk: false,
+      status: response.status,
+      statusText: response.statusText,
+      data: null as any,
+      errorMessage,
+    };
+  } catch (e) {
+    let errorMessage = "Http Connection Error";
+    if (timedOut) {
+      errorMessage = `timeout of ${timeout}ms exceeded`;
+    } else if (userSignal?.aborted) {
+      errorMessage = "Request cancelled";
+    }
+
+    return {
+      isOk: false,
+      status: 0,
+      statusText: "",
+      data: null as any,
+      errorMessage,
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+    userSignal?.removeEventListener("abort", onAbort);
+  }
 }
 
 export function httpGet<TResponse>(
@@ -650,7 +690,7 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const httpConfig: AxiosRequestConfig = {
+    const httpConfig: Record<string, any> = {
       headers: { ...appHttpHeaders, ...headers },
     };
 
@@ -693,7 +733,7 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const httpConfig: AxiosRequestConfig = {
+    const httpConfig: Record<string, any> = {
       headers: { ...appHttpHeaders, ...headers },
     };
 
@@ -778,7 +818,7 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const httpConfig: AxiosRequestConfig = {
+    const httpConfig: Record<string, any> = {
       headers: { ...appHttpHeaders, ...headers },
     };
 
@@ -834,7 +874,7 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const httpConfig: AxiosRequestConfig = {
+    const httpConfig: Record<string, any> = {
       headers: { ...appHttpHeaders, ...headers },
     };
 
@@ -929,7 +969,7 @@ export class SqlDataApi {
 
     if (!items || !items.length) {
       if (itemsToDelete?.length) {
-        const httpConfig: AxiosRequestConfig = {
+        const httpConfig: Record<string, any> = {
           headers: { ...appHttpHeaders, ...headersValue },
         };
 
@@ -992,7 +1032,7 @@ export class SqlDataApi {
             url += `?$accessToken=${this.userAccessToken}`;
           }
 
-          const httpConfig: AxiosRequestConfig = {
+          const httpConfig: Record<string, any> = {
             headers: { ...appHttpHeaders, ...headersValue },
           };
 
@@ -1160,9 +1200,9 @@ export class SqlDataApi {
       url += `?$accessToken=${this.userAccessToken}`;
     }
 
-    const httpConfig = {
+    const httpConfig: Record<string, any> = {
       headers: { ...appHttpHeaders, ...headers },
-    } as AxiosRequestConfig;
+    };
 
     if (this.abortSignal) {
       httpConfig.signal = this.abortSignal;
