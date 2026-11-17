@@ -5,11 +5,14 @@ import {
   ScalarType,
   Table,
   TableDto,
-} from "datapipe-js";
-import { dateToString, fromTable, toTable } from "datapipe-js/utils";
+  dateToString,
+  fromTable,
+  toTable,
+} from "./data-utils";
 import { DbTypeConverter } from "./db-type-converter";
 import { JoinType, TableJoinDto } from "./db-types";
 
+export * from "./data-utils";
 export * from "./db-types";
 
 const appHttpHeaders = {

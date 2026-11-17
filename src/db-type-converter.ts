@@ -1,4 +1,4 @@
-import { DataTypeName } from "datapipe-js";
+import { DataTypeName } from "./data-utils";
 import {
   DataTypeToPostgreSqlTypesMap,
   DataTypeToSqlTypesMap,

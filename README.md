@@ -450,6 +450,28 @@ A script with several `SELECT` statements (or a stored procedure that returns se
 JavaScript `Date` values can be used anywhere parameters or items are sent (`filterParams`, `save` items, `updateData`, `sqlExecute` params).
 They are encoded for the server automatically, so there is no need to format dates as strings.
 
+## Table and date helpers
+
+The helpers the library uses internally are exported as well, together with their types
+(`ScalarObject`, `PrimitivesObject`, `Table`, `TableDto`, `DataTypeName`...). The package has no runtime dependencies.
+
+```js
+import { fromTable, toTable, dateToString, parseDatetimeOrNull, parseNumberOrNull } from 'sql-data-api';
+
+// table -> array of objects (Date / DateTime columns become Date objects)
+const table = await sqlDataApi('conn').queryToTable('dbo.Orders');
+const items = fromTable(table);
+
+// array of objects -> table ({ fieldNames, rows }); Date values become strings
+const dto = toTable([{ id: 1, created: new Date() }]);
+
+dateToString(new Date(2024, 2, 5));               // '2024-03-05'
+dateToString(new Date(2024, 2, 5), 'dd/MM/yyyy'); // '05/03/2024'
+parseDatetimeOrNull('25/12/2023');                // Date, or null when not a date
+parseDatetimeOrNull('12/25/2023', 'MM/dd/yyyy');  // US dates need the format hint
+parseNumberOrNull('1,234.5');                     // 1234.5
+```
+
 ## Cancellation
 
 Any http request can be cancelled with a standard `AbortSignal`.

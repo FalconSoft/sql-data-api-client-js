@@ -31,14 +31,8 @@ const flattenDeclarations = () => ({
 
 export default [{
   input,
-  output: { file: pkg.main, name: 'sql-data-api', format: 'umd', sourcemap: true, compact: true, globals: {
-    'datapipe-js': 'dataPipeJs',
-    'datapipe-js/utils': 'dataPipeJsUtils'
-  }},
-  external: [
-    'datapipe-js',
-    'datapipe-js/utils'
-  ],
+  output: { file: pkg.main, name: 'sql-data-api', format: 'umd', sourcemap: true, compact: true },
+  external: [],
   treeshake: true,
   plugins: [
     typescript({
