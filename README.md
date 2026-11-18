@@ -17,8 +17,12 @@ SQL Data Api client for Javascript
  - [Sql Execute](#sql-execute)
     * [Multiple result sets](#multiple-result-sets)
  - [Dates and parameters](#dates-and-parameters)
+ - [Table and date helpers](#table-and-date-helpers)
+ - [DB type converter](#db-type-converter)
  - [Cancellation](#cancellation)
+ - [HTTP helpers](#http-helpers)
  - [Custom transport](#custom-transport)
+ - [All exports](#all-exports)
  - [License](#license)
 
 ## Install
@@ -26,6 +30,9 @@ SQL Data Api client for Javascript
 ```
 npm install sql-data-api
 ```
+
+The package has no runtime dependencies. Requests are sent with the platform's `fetch`, so it works in browsers
+and in Node 18+ (for other environments see [Custom transport](#custom-transport)). TypeScript declarations are included.
 
 ## Set base URL
 
@@ -50,6 +57,16 @@ const api = sqlDataApi('connectionName', {
 });
 ```
 
+`sqlDataApi(connectionName, config?, abortSignal?)` is a factory for the `SqlDataApi` class, which can also be created directly:
+
+```js
+import { SqlDataApi } from 'sql-data-api';
+
+const api = new SqlDataApi('https://api.worksheet.systems', 'connectionName', { bearerToken: '$BEARER_TOKEN' });
+```
+
+The global defaults are stored in the static fields `SqlDataApi.BaseUrl`, `SqlDataApi.UserAccessToken` and `SqlDataApi.BearerToken`.
+
 ## Authenticate
 
 All sql-api operations should be authenticated unless public access allowed. Check Worksheet Systems Access Control model
@@ -64,6 +81,8 @@ import { authenticate } from 'sql-data-api';
 await authenticate("testUser", "1111111")
 
 ```
+
+`authenticate(username, password): Promise<boolean>` logs in against the base URL and stores the returned bearer token for all further calls. It throws when the login fails.
 
 2. Use `Api Access Token` generated https://app.worksheet.systems/account/settings/info
 
@@ -226,7 +245,13 @@ instead of an array of objects. This is cheaper for large result sets.
 
 ```js
 queryToTable(tableOrViewName: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<Table<PrimitiveType>>;
+
+const table = await sqlDataApi('connectionName')
+    .queryToTable('Orders', { fields: 'OrderId, OrderDate', top: 1000 });
+// table.fieldNames -> ['OrderId', 'OrderDate'], table.rows -> [[1, '2024-03-05'], ...]
 ```
+
+Unlike `query`, it does not use the fluent builder state, and date columns stay as strings. Use [`fromTable`](#table-and-date-helpers) to convert the table to objects later.
 
 ## Saving Data
 
@@ -357,6 +382,9 @@ Deletes rows from the table based on a primary keys. Only key fields have to be 
     tableName: string,
     items: Record<string, ScalarType>[]
   ): Promise<boolean>
+
+  await sqlDataApi('someConnection')
+    .delete('Customers', [{ CustomerId: 10 }, { CustomerId: 11 }]);
 ```
 
 
@@ -374,6 +402,9 @@ Delete records from the table based on filter criteria
     filter?: string,
     filterParams?: Record<string, ScalarType>
   ): Promise<number>
+
+  const deleted = await sqlDataApi('someConnection')
+    .deleteFrom('Customers', 'Country = @country', { country: 'UK' });
 ```
 
 ## SQL Execute
@@ -452,8 +483,8 @@ They are encoded for the server automatically, so there is no need to format dat
 
 ## Table and date helpers
 
-The helpers the library uses internally are exported as well, together with their types
-(`ScalarObject`, `PrimitivesObject`, `Table`, `TableDto`, `DataTypeName`...). The package has no runtime dependencies.
+The helpers the library uses internally are exported as well, together with their types, so they can be used
+in any project that installs this package.
 
 ```js
 import { fromTable, toTable, dateToString, parseDatetimeOrNull, parseNumberOrNull } from 'sql-data-api';
@@ -471,6 +502,51 @@ parseDatetimeOrNull('25/12/2023');                // Date, or null when not a da
 parseDatetimeOrNull('12/25/2023', 'MM/dd/yyyy');  // US dates need the format hint
 parseNumberOrNull('1,234.5');                     // 1234.5
 ```
+
+| Function | Description |
+| --- | --- |
+| `fromTable(rowsOrTable, fieldNames?, fieldDataTypes?): ScalarObject[]` | Converts a table (or a plain array of rows) to an array of objects. Columns typed `Date` / `DateTime` are parsed into `Date` objects. Without field names they are generated as `Field0`, `Field1`... |
+| `toTable(values: ScalarObject[]): TableDto` | Converts an array of objects to `{ fieldNames, rows }`. Field names are the union of all object keys; `Date` values are converted with `dateToString`. |
+| `dateToString(date: Date, format?: string): string` | Formats a date using its local time. Without a format returns `yyyy-MM-dd` when there is no time part, otherwise `yyyy-MM-ddTHH:mm:ss.fffZ`. Formats: `dd/MM/yyyy`, `MM/dd/yyyy`, `dd/MM/yy`, `yyyyMMdd`, `MM-dd-yyyy`, `MM-dd-yy`, `dd-MM-yyyy`, `yyyy-MM-dd` (case-insensitive). |
+| `parseDatetimeOrNull(value, format?): Date \| null` | Parses a string, a number (epoch ms) or a `Date`. Without a format it tries ISO (`yyyy-MM-dd...`) and then UK (`dd/MM/yyyy`, `dd-MMM-yy`). Format hints: `MM/dd/yy`, `dd/MM/yy`, `yyyy-MM`, `yyyyMM` and their `MMM` / dash variants. Dates are created in the local time zone. |
+| `parseNumberOrNull(value): number \| null` | Parses a number from a string made only of digits, `.`, `,` and a leading `-`; anything else gives `null`. |
+
+Types:
+
+```ts
+type PrimitiveType = string | number | bigint | boolean | null;
+type ScalarType = PrimitiveType | Date;
+type ScalarObject = Record<string, ScalarType>;         // may hold Date values
+type PrimitivesObject = Record<string, PrimitiveType>;  // safe to send over the wire
+
+enum DataTypeName { String, LargeString, WholeNumber, BigIntNumber, FloatNumber, DateTime, Date, Boolean }
+
+interface Table<T> {
+  fieldDataTypes?: DataTypeName[];
+  fieldNames: string[];
+  rows: T[][];
+}
+type TableDto = Table<PrimitiveType>;
+```
+
+## DB type converter
+
+`dbTypeConverter()` maps between the generic `DataTypeName` and vendor specific SQL types
+(enums `SQLDataTypes`, `PostgreSqlDataTypes` and `SybaseAseDataTypes`).
+
+```js
+import { dbTypeConverter, DataTypeName, SQLDataTypes } from 'sql-data-api';
+
+const converter = dbTypeConverter();
+
+converter.toDbType(DataTypeName.WholeNumber, 'PostgreSql');    // 'int'
+converter.toDbType(DataTypeName.DateTime, 'SqlServer');        // 'datetime2'
+converter.fromDbType(SQLDataTypes.NVARCHAR, 'SqlServer');      // 'String'
+```
+
+ - `toDbType(dataType, connectionType)` / `fromDbType(dbType, connectionType)` - `connectionType` is one of `SqlServer`, `SqlServerSchema`, `PostgreSql`, `SybaseAse` (type `DbConnectionType`); other connection types throw
+ - `toSqlServerType(dataType)`, `toPostgreSqlType(dataType)`, `toSybaseAseSqlType(dataType)`
+ - `fromSqlServerType(dbType)`, `fromPostgreSqlType(dbType)`, `fromSybaseAseSqlType(dbType)`
 
 ## Cancellation
 
@@ -496,6 +572,32 @@ await request; // rejects with Error("Request cancelled")
 ```
 
 For batched saves, aborting stops before the next batch is sent.
+
+## HTTP helpers
+
+The low-level request functions used by the library are exported too. They are plain helpers:
+the URL must be absolute and no authentication is added for you.
+
+```js
+import { httpGet, httpGetText, httpPost, httpPut, httpDelete, httpRequest } from 'sql-data-api';
+
+const data = await httpGet('https://example.com/api/items', {
+    headers: { Authorization: 'Bearer ...' },
+    signal: abortController.signal,
+    timeout: 30000,
+});
+const text = await httpGetText('https://example.com/readme.txt');
+const created = await httpPost('https://example.com/api/items', { name: 'A' });
+
+// never throws: inspect the response yourself
+const res = await httpRequest('POST', 'https://example.com/api/items', { name: 'A' });
+if (!res.isOk) console.log(res.status, res.errorMessage);
+```
+
+ - `httpGet(url, config?)`, `httpGetText(url, config?)`, `httpPost(url, body, config?)`, `httpPut(url, body, config?)`, `httpDelete(url, body, config?)` - resolve with the response data (JSON is parsed, anything else is returned as text) and throw an `Error` with the server's message on failure
+ - `httpRequest(method, url, body?, config?): Promise<ServerResponse>` - never rejects; returns `{ data, isOk, status, statusText, errorMessage? }` (`status` is `0` for network failures, timeouts and cancellation)
+ - `config` - `headers`, `signal` (an `AbortSignal`), `timeout` in milliseconds; any other property is passed to `fetch` as a request option (`credentials`, `mode`, `cache`...)
+ - object bodies are sent as JSON and `Content-Type: application/json` is added when a body is present and no content type was given
 
 ## Custom transport
 
@@ -528,8 +630,38 @@ setRequestHandler(async (request) => {
 setRequestHandler(null); // restore the default fetch transport
 ```
 
-`setRequestHandler` affects every `sqlDataApi(...)` instance as well as `httpGet`, `httpPost`, `httpPut`,
+`setRequestHandler` affects every `sqlDataApi(...)` instance as well as `httpRequest`, `httpGet`, `httpGetText`, `httpPost`, `httpPut`,
 `httpDelete` and `authenticate`. Report cancellation with `errorMessage: "Request cancelled"`.
+
+`getRequestHandler()` returns the handler currently in use (the default fetch one unless replaced), which is handy
+for wrapping it:
+
+```js
+import { getRequestHandler, setRequestHandler } from 'sql-data-api';
+
+const original = getRequestHandler();
+setRequestHandler(async (request) => {
+  console.log(request.method, request.url);
+  return original(request);
+});
+```
+
+## All exports
+
+Everything is imported from the package root: `import { ... } from 'sql-data-api'`.
+
+| Group | Exports |
+| --- | --- |
+| Configuration | `setBaseUrl`, `setUserAccessToken`, `setBearerToken`, `authenticate` |
+| Client | `sqlDataApi`, `SqlDataApi` |
+| `SqlDataApi` query methods | `query`, `queryToTable`, `table`, `select`, `filter`, `andFilter`, `orderBy`, `top`, `join`, `innerJoin`, `leftJoin`, `rightJoin` |
+| `SqlDataApi` save methods | `save`, `saveWithAutoId`, `updateData`, `delete`, `deleteFrom` |
+| `SqlDataApi` execute methods | `sqlExecute`, `sqlExecuteMultiple`, `sqlExecuteRaw` |
+| `SqlDataApi` other | `setAbortSignal`, static `BaseUrl`, `UserAccessToken`, `BearerToken` |
+| Table and date helpers | `fromTable`, `toTable`, `dateToString`, `parseDatetimeOrNull`, `parseNumberOrNull` |
+| DB types | `dbTypeConverter`, enums `DataTypeName`, `SQLDataTypes`, `PostgreSqlDataTypes`, `SybaseAseDataTypes`, `JoinType` |
+| HTTP | `httpRequest`, `httpGet`, `httpGetText`, `httpPost`, `httpPut`, `httpDelete`, `setRequestHandler`, `getRequestHandler` |
+| Types (TypeScript) | `SqlReadQueryInfo`, `SqlSaveOptions`, `SqlSaveStatus`, `SqlQueryResponse`, `SqlResultSet`, `SqlResultFieldInfo`, `SqlExecuteResult`, `ScalarType`, `ScalarObject`, `PrimitiveType`, `PrimitivesObject`, `Table`, `TableDto`, `DbConnectionType`, `TableJoinDto`, `HttpMethod`, `HttpRequestInfo`, `HttpRequestHandler`, `ServerResponse` |
 
 
 ## License
