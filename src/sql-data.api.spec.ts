@@ -123,6 +123,44 @@ describe("setRequestHandler", () => {
   });
 });
 
+describe("typed rows", () => {
+  interface CountRow {
+    count: number;
+  }
+  const api = new SqlDataApi("http://localhost", "conn", { bearerToken: "t" });
+  const table = { fieldNames: ["count"], rows: [[5]] };
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it("query<T> returns rows of the declared shape", async () => {
+    jest.spyOn(api as any, "_queryTable").mockResolvedValue(table);
+
+    const rows = await api.query<CountRow>("dbo.t", "count(*) count");
+    const count: number = rows[0].count;
+
+    expect(count).toBe(5);
+  });
+
+  it("query without a type still returns ScalarObject rows", async () => {
+    jest.spyOn(api as any, "_queryTable").mockResolvedValue(table);
+
+    const rows = await api.query("dbo.t", "count(*) count");
+
+    expect(rows[0]["count"]).toBe(5);
+  });
+
+  it("sqlExecute<T> returns rows of the declared shape, and [] for an empty response", async () => {
+    const raw = jest.spyOn(api, "sqlExecuteRaw");
+    raw.mockResolvedValueOnce({ table } as SqlQueryResponse);
+    const rows = await api.sqlExecute<CountRow>("select count(*) count from t");
+    const count: number = rows[0].count;
+    expect(count).toBe(5);
+
+    raw.mockResolvedValueOnce(null as unknown as SqlQueryResponse);
+    expect(await api.sqlExecute("update t set x = 1")).toEqual([]);
+  });
+});
+
 describe("sqlExecuteMultiple", () => {
   const api = new SqlDataApi("http://localhost", "conn", { bearerToken: "t" });
 

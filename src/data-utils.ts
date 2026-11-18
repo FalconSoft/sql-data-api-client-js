@@ -281,12 +281,13 @@ export function dateToString(d: Date, format?: string): string {
  * @param rowsOrTable Table data or array of rows.
  * @param fieldNames Column names. If not provided, they will be auto generated (Field0, Field1...)
  * @param fieldDataTypes Column data types
+ * @typeParam T Shape of a row, when the caller knows it. It is not validated at runtime.
  */
-export function fromTable(
+export function fromTable<T extends object = ScalarObject>(
   rowsOrTable: PrimitiveType[][] | TableDto,
   fieldNames?: string[],
   fieldDataTypes?: DataTypeName[]
-): ScalarObject[] {
+): T[] {
   const table = rowsOrTable as TableDto;
   const rows = table?.rows || (rowsOrTable as PrimitiveType[][]) || [];
 
@@ -312,7 +313,7 @@ export function fromTable(
     values.push(value);
   }
 
-  return values;
+  return values as T[];
 }
 
 /**

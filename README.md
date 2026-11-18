@@ -105,7 +105,11 @@ setBearerToken('$BEARER_TOKEN')
 ```js
 
 // returns table as array of items
-query(tableOrViewName?: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<ScalarObject[]>;
+query<T extends object = ScalarObject>(tableOrViewName?: string, fieldsOrQuery?: string | SqlReadQueryInfo, queryInfoSettings?: SqlReadQueryInfo): Promise<T[]>;
+
+// TypeScript: declare the row shape when you know it (it is a compile-time hint, not validated at runtime)
+const [{ count }] = await sqlDataApi('connectionName')
+    .query<{ count: number }>('someTableOrViewName', 'count(*) count');
 
 // Query specification
 export interface SqlReadQueryInfo {
@@ -427,10 +431,10 @@ If `sql` contains no whitespace it is treated as a stored procedure name, otherw
    * Executes a SQL Query or stored procedure with parameters
    * @returns the first result set as an array of objects
    */
-  async sqlExecute(
+  async sqlExecute<T extends object = ScalarObject>(
     sql: string,
     params?: ScalarObject
-  ): Promise<ScalarObject[] | unknown>
+  ): Promise<T[]>
 
   const rows = await sqlDataApi('myConnection')
     .sqlExecute('SELECT * FROM Orders WHERE Country = @country', { country: 'UK' });
@@ -505,7 +509,7 @@ parseNumberOrNull('1,234.5');                     // 1234.5
 
 | Function | Description |
 | --- | --- |
-| `fromTable(rowsOrTable, fieldNames?, fieldDataTypes?): ScalarObject[]` | Converts a table (or a plain array of rows) to an array of objects. Columns typed `Date` / `DateTime` are parsed into `Date` objects. Without field names they are generated as `Field0`, `Field1`... |
+| `fromTable<T = ScalarObject>(rowsOrTable, fieldNames?, fieldDataTypes?): T[]` | Converts a table (or a plain array of rows) to an array of objects. Columns typed `Date` / `DateTime` are parsed into `Date` objects. Without field names they are generated as `Field0`, `Field1`... |
 | `toTable(values: ScalarObject[]): TableDto` | Converts an array of objects to `{ fieldNames, rows }`. Field names are the union of all object keys; `Date` values are converted with `dateToString`. |
 | `dateToString(date: Date, format?: string): string` | Formats a date using its local time. Without a format returns `yyyy-MM-dd` when there is no time part, otherwise `yyyy-MM-ddTHH:mm:ss.fffZ`. Formats: `dd/MM/yyyy`, `MM/dd/yyyy`, `dd/MM/yy`, `yyyyMMdd`, `MM-dd-yyyy`, `MM-dd-yy`, `dd-MM-yyyy`, `yyyy-MM-dd` (case-insensitive). |
 | `parseDatetimeOrNull(value, format?): Date \| null` | Parses a string, a number (epoch ms) or a `Date`. Without a format it tries ISO (`yyyy-MM-dd...`) and then UK (`dd/MM/yyyy`, `dd-MMM-yy`). Format hints: `MM/dd/yy`, `dd/MM/yy`, `yyyy-MM`, `yyyyMM` and their `MMM` / dash variants. Dates are created in the local time zone. |

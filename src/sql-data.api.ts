@@ -619,16 +619,18 @@ export class SqlDataApi {
   /**
    * queries data from SQL Server
    * @returns An array of items
+   * @typeParam T Shape of a row, when the caller knows it, e.g. `query<{ count: number }>(...)`.
+   * It is not validated at runtime.
    */
-  async query(
+  async query<T extends object = ScalarObject>(
     tableOrViewName?: string,
     fieldsOrQuery?: string | SqlReadQueryInfo,
     queryInfoSettings?: SqlReadQueryInfo
-  ): Promise<ScalarObject[]> {
+  ): Promise<T[]> {
     const qInfo = Object.keys(this.queryInfo).length
       ? this.queryInfo
       : undefined;
-    const result = await this._query(
+    const result = await this._query<T>(
       tableOrViewName || this.tableName,
       fieldsOrQuery || this.queryInfo?.fields,
       queryInfoSettings || qInfo
@@ -898,14 +900,15 @@ export class SqlDataApi {
 
   /**
    * Executes a SQL Query or stored procedure with parameters
-   * @returns result as a list of arrays
+   * @returns result as an array of objects
+   * @typeParam T Shape of a row, when the caller knows it. It is not validated at runtime.
    */
-  async sqlExecute(
+  async sqlExecute<T extends object = ScalarObject>(
     sql: string,
     params?: ScalarObject
-  ): Promise<ScalarObject[] | unknown> {
+  ): Promise<T[]> {
     const response = await this.sqlExecuteRaw(sql, params);
-    return response ? fromTable(response.table as TableDto) : response;
+    return response ? fromTable<T>(response.table as TableDto) : [];
   }
 
   /**
@@ -1086,17 +1089,17 @@ export class SqlDataApi {
     return result;
   }
 
-  private async _query(
+  private async _query<T extends object = ScalarObject>(
     tableOrViewName: string,
     fieldsOrQuery?: string | SqlReadQueryInfo,
     queryInfoSettings?: SqlReadQueryInfo
-  ): Promise<ScalarObject[]> {
+  ): Promise<T[]> {
     const table = await this._queryTable(
       tableOrViewName,
       fieldsOrQuery,
       queryInfoSettings
     );
-    return fromTable(table);
+    return fromTable<T>(table);
   }
 
   private async _queryTable(
